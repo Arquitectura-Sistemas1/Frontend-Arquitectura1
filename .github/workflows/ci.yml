@@ -1,4 +1,4 @@
-name: CI Frontend
+name: CI/CD Pipeline - Frontend
 
 on:
   push:
@@ -7,11 +7,15 @@ on:
     branches: [ "develop", "main", "Develop" ]
 
 jobs:
+  
+  # 1.  ESTO ES DEEEEL INTEGRACIÓN CONTINUA (CI)
+  
   build-and-validate:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar código
+        uses: actions/checkout@v4
 
       - name: Validar archivos obligatorios
         run: |
@@ -21,3 +25,64 @@ jobs:
 
       - name: Validar compilacion de Dockerfile Frontend
         run: docker build -t frontend-app-test .
+
+ 
+  # 2. ESTO ES DE DESPLIEGUE CONTINUO - DESARROLLO (Ubuntu Server / Tailscale)
+  
+  deploy-dev:
+    name: Despliegue a Entorno de Desarrollo
+    needs: build-and-validate
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/Develop')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Conectar a la VPN de Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Desplegar Frontend en Ubuntu Server vía SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DEV_SERVER_HOST }}
+          username: ${{ secrets.DEV_SERVER_USER }}
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          script: |
+            cd /ruta/de/tu/proyecto/frontend
+            git pull origin Develop
+            docker build -t frontend-dev .
+            docker stop frontend-dev-container || true
+            docker rm frontend-dev-container || true
+            docker run -d --name frontend-dev-container -p 3000:3000 frontend-dev
+
+  
+  # 3. estooo es de DESPLIEGUE CONTINUO - PRODUCCIÓN (Oracle Cloud)
+  
+  deploy-prod:
+    name: Despliegue a Producción (OCI)
+    needs: build-and-validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Desplegar Frontend en Oracle Cloud vía SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /ruta/de/tu/proyecto/frontend
+            git pull origin main
+            docker build -t frontend-prod .
+            docker stop frontend-prod-container || true
+            docker rm frontend-prod-container || true
+            docker run -d --name frontend-prod-container -p 80:3000 frontend-prod
