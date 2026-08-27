@@ -16,7 +16,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-attachment: fixed;  
 }
 
 .login-logo {
@@ -29,7 +29,7 @@ body {
 .login-box {
   width: 380px;
   padding: 40px;
-  background: white;
+  background: rgb(30, 29, 29);
   border-radius: 12px;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
 }
