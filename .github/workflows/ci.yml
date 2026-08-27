@@ -11,7 +11,7 @@ jobs:
   # 1.  ESTO ES DEEEEL INTEGRACIÓN CONTINUA (CI)
   
   build-and-validate:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Descargar código
