@@ -6,20 +6,45 @@ function App() {
   const [password, setPassword] = useState('');
   const [mensaje, setMensaje] = useState('');
 
-  const manejarLogin = (e) => {
+const manejarLogin = async (e) => {
     e.preventDefault();
 
-    if (usuario === 'admin' && password === '1234') {
-      setMensaje('¡Inicio de sesión exitoso!');
-    } else {
-      setMensaje('Usuario o contraseña incorrectos');
+    const NGROK_URL = "https://luxury-roster-uncouth.ngrok-free.dev";
+    
+    // Concatenamos los valores como parámetros de consulta (Query Params) en la URL
+    const url = `${NGROK_URL}/auth/login?usuario=${encodeURIComponent(usuario)}&password=${encodeURIComponent(password)}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST', // Sigue siendo POST porque así lo definiste en FastAPI
+        headers: {
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true', // Mantiene fuera la advertencia de ngrok
+        }
+        // ¡Ya no lleva la propiedad 'body'!
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMensaje(`¡Éxito! ${data.message} (${data.tipo_cuenta})`);
+        console.log("Datos del usuario:", data.data);
+      } else {
+        // Manejo seguro del error para evitar [object Object]
+        const errorMsg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        setMensaje(`Error: ${errorMsg}`);
+      }
+
+    } catch (error) {
+      console.error("Error de red:", error);
+      setMensaje("No se pudo conectar con el servidor.");
     }
   };
 
   return (
     <div className="login-container">
       <div className="login-box">
-        <h1>Iniciar sesión</h1>
+        <img src="/images/LogoNexusBC.png" alt="logo" className='login-logo'/>
         <p>Bienvenido</p>
 
         <form onSubmit={manejarLogin}>

@@ -12,7 +12,18 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #f0f2f5;
+  background-image: url('/images/login-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.login-logo {
+  max-width: 120px;
+  height: auto;
+  display: block;
+  margin: 0 auto 1rem;
 }
 
 .login-box {
