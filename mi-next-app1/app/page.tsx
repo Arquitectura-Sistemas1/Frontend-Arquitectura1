@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 
 const productos = [
   {
@@ -54,18 +55,35 @@ const productos = [
   },
 ];
 
-type Producto = (typeof productos)[number];
+export type Producto = (typeof productos)[number];
 
 export default function Home() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [carrito, setCarrito] = useState<Producto[]>([]);
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [juegoDetalle, setJuegoDetalle] = useState<Producto | null>(null);
+  const [busqueda, setBusqueda] = useState("");
 
-  // Garantiza que el portal solo se ejecute en el cliente
+  // Cargar datos iniciales desde localStorage tras montar en cliente
   useEffect(() => {
     setMounted(true);
+    const dataGuardada = localStorage.getItem("carrito_nexus");
+    if (dataGuardada) {
+      try {
+        setCarrito(JSON.parse(dataGuardada));
+      } catch (e) {
+        console.error("Error al parsear el carrito guardado", e);
+      }
+    }
   }, []);
+
+  // Guardar en localStorage cada vez que cambia el carrito
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem("carrito_nexus", JSON.stringify(carrito));
+    }
+  }, [carrito, mounted]);
 
   function agregarAlCarrito(producto: Producto) {
     setCarrito((prev) => [...prev, producto]);
@@ -84,6 +102,12 @@ export default function Home() {
     0
   );
 
+  const productosFiltrados = productos.filter(
+    (producto) =>
+      producto.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      producto.descripcion.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
   return (
     <main className="min-h-screen bg-[#100C18] text-white">
       {/* ================= NAVBAR ================= */}
@@ -99,13 +123,23 @@ export default function Home() {
           </div>
 
           <div className="hidden w-[400px] md:block">
-            <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3">
+            <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 focus-within:border-purple-500">
               <span className="mr-3">🔎</span>
               <input
                 type="text"
                 placeholder="Buscar juegos..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
               />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda("")}
+                  className="text-xs text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -130,7 +164,12 @@ export default function Home() {
               )}
             </button>
 
-            <button type="button" className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700">
+            {/* BOTÓN CONECTADO A /login */}
+            <button 
+              type="button" 
+              onClick={() => router.push("/login")}
+              className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
+            >
               Iniciar sesión
             </button>
           </nav>
@@ -200,54 +239,64 @@ export default function Home() {
           <p className="text-sm font-bold uppercase tracking-widest text-purple-500">
             Selección
           </p>
-          <h2 className="mt-1 text-3xl font-bold">Ofertas destacadas</h2>
+          <h2 className="mt-1 text-3xl font-bold">
+            {busqueda ? `Resultados para "${busqueda}"` : "Ofertas destacadas"}
+          </h2>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {productos.map((producto) => (
-            <article
-              key={producto.id}
-              className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
-            >
-              <div className="relative h-52 overflow-hidden bg-[#211A2D]">
-                <img
-                  src={producto.imagen}
-                  alt={producto.nombre}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                />
-                <div className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
-                  -{producto.descuento}%
-                </div>
-              </div>
-
-              <div className="p-5">
-                <h3 className="text-lg font-bold group-hover:text-purple-400">
-                  {producto.nombre}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {producto.descripcion}
-                </p>
-
-                <div className="mt-5 flex items-end justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500">Desde</p>
-                    <span className="text-2xl font-black">
-                      Q{producto.precio.toFixed(2)}
-                    </span>
+        {productosFiltrados.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-lg text-gray-400">
+              No se encontraron juegos que coincidan con tu búsqueda.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {productosFiltrados.map((producto) => (
+              <article
+                key={producto.id}
+                className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
+              >
+                <div className="relative h-52 overflow-hidden bg-[#211A2D]">
+                  <img
+                    src={producto.imagen}
+                    alt={producto.nombre}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
+                    -{producto.descuento}%
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setJuegoDetalle(producto)}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
-                  >
-                    Comprar
-                  </button>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+
+                <div className="p-5">
+                  <h3 className="text-lg font-bold group-hover:text-purple-400">
+                    {producto.nombre}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {producto.descripcion}
+                  </p>
+
+                  <div className="mt-5 flex items-end justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500">Desde</p>
+                      <span className="text-2xl font-black">
+                        Q{producto.precio.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setJuegoDetalle(producto)}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
+                    >
+                      Comprar
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ================= MODAL MEDIANTE PORTAL ================= */}
@@ -369,8 +418,8 @@ export default function Home() {
 
                 <button
                   type="button"
-                  onClick={() => alert("Próximamente: proceso de compra")}
-                  className="mt-5 w-full rounded-lg bg-green-600 py-3 font-bold transition hover:bg-green-500"
+                  onClick={() => router.push("/checkout")}
+                  className="mt-5 w-full rounded-lg bg-green-600 py-3 font-bold transition hover:bg-green-500 active:scale-95"
                 >
                   Continuar compra
                 </button>
