@@ -150,6 +150,13 @@ export default function Home() {
             <a href="#categorias" className="hidden text-sm text-gray-300 hover:text-white md:block">
               Categorías
             </a>
+            <button
+           type="button"
+          onClick={() => router.push("/biblioteca")}
+           className="hidden text-sm text-gray-300 hover:text-white md:block"
+>
+  Mi Biblioteca
+</button>
 
             <button
               onClick={() => setMostrarCarrito(!mostrarCarrito)}
