@@ -75,7 +75,7 @@ export default function AdminDashboard() {
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col justify-between">
         <div>
           <div className="mb-8 flex justify-center">
-            <img src="/logo.png" alt="Nexus Games Logo" className="max-h-14 w-auto object-contain" />
+            <img src="/logo.png" alt="Nexus Games Logo" className="max-h-24 w-auto object-contain" />
           </div>
 
           <nav className="space-y-2">
