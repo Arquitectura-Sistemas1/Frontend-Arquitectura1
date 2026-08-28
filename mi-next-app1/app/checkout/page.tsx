@@ -10,6 +10,16 @@ export default function CheckoutPage() {
   const [carrito, setCarrito] = useState<Producto[]>([]);
   const [cargando, setCargando] = useState(true);
 
+  // Estados del formulario y envío
+  const [email, setEmail] = useState("");
+  const [nombreTarjeta, setNombreTarjeta] = useState("");
+  const [numeroTarjeta, setNumeroTarjeta] = useState("");
+  const [vencimiento, setVencimiento] = useState("");
+  const [cvv, setCvv] = useState("");
+
+  const [procesando, setProcesando] = useState(false);
+  const [errorPago, setErrorPago] = useState<string | null>(null);
+
   useEffect(() => {
     const dataGuardada = localStorage.getItem("carrito_nexus");
     if (dataGuardada) {
@@ -39,11 +49,50 @@ export default function CheckoutPage() {
   );
   const totalAhorrado = subtotal - totalConDescuento;
 
-  function manejarPago(e: React.FormEvent) {
+  // Integración de Pago mediante POST a API REST
+  async function manejarPago(e: React.FormEvent) {
     e.preventDefault();
-    alert("¡Pago procesado con éxito! Tus claves digitales se han enviado a tu correo.");
-    localStorage.removeItem("carrito_nexus");
-    router.push("/");
+    setProcesando(true);
+    setErrorPago(null);
+
+    try {
+      // Estructura del payload con la orden
+      const payloadOrden = {
+        clienteEmail: email,
+        pagoInfo: {
+          nombreTarjeta,
+          // Se envían datos procesables/enmascarados según la pasarela
+          ultimosDigitos: numeroTarjeta.slice(-4), 
+        },
+        items: carrito.map((p) => ({
+          productoId: p.id,
+          precioOriginal: p.precio,
+          precioFinal: calcularPrecioFinal(p),
+          descuento: p.descuento,
+        })),
+        total: totalConDescuento,
+      };
+
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadOrden),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "No se pudo procesar la transacción.");
+      }
+
+      alert("¡Pago procesado con éxito! Tus claves digitales se han enviado a tu correo.");
+      localStorage.removeItem("carrito_nexus");
+      router.push("/");
+    } catch (err: any) {
+      console.error("Error en la transacción:", err);
+      setErrorPago(err.message || "Ocurrió un error al procesar el pago.");
+    } finally {
+      setProcesando(false);
+    }
   }
 
   if (cargando) {
@@ -95,9 +144,15 @@ export default function CheckoutPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-10 lg:grid-cols-12">
+          <form onSubmit={manejarPago} className="grid gap-10 lg:grid-cols-12">
             {/* FORMULARIO DE PAGO */}
             <div className="lg:col-span-7 space-y-6">
+              {errorPago && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+                  {errorPago}
+                </div>
+              )}
+
               <div className="rounded-2xl border border-purple-900/40 bg-[#181323] p-6">
                 <h2 className="mb-4 text-xl font-bold">1. Datos de Contacto</h2>
                 <div className="space-y-4">
@@ -108,6 +163,8 @@ export default function CheckoutPage() {
                     <input
                       type="email"
                       required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="tu@correo.com"
                       className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
                     />
@@ -117,7 +174,7 @@ export default function CheckoutPage() {
 
               <div className="rounded-2xl border border-purple-900/40 bg-[#181323] p-6">
                 <h2 className="mb-4 text-xl font-bold">2. Método de Pago</h2>
-                <form onSubmit={manejarPago} className="space-y-4">
+                <div className="space-y-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-400">
                       Nombre en la tarjeta
@@ -125,6 +182,8 @@ export default function CheckoutPage() {
                     <input
                       type="text"
                       required
+                      value={nombreTarjeta}
+                      onChange={(e) => setNombreTarjeta(e.target.value)}
                       placeholder="Juan Pérez"
                       className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
                     />
@@ -137,6 +196,8 @@ export default function CheckoutPage() {
                     <input
                       type="text"
                       required
+                      value={numeroTarjeta}
+                      onChange={(e) => setNumeroTarjeta(e.target.value)}
                       placeholder="4000 0000 0000 0000"
                       className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
                     />
@@ -150,6 +211,8 @@ export default function CheckoutPage() {
                       <input
                         type="text"
                         required
+                        value={vencimiento}
+                        onChange={(e) => setVencimiento(e.target.value)}
                         placeholder="MM/AA"
                         className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
                       />
@@ -161,6 +224,8 @@ export default function CheckoutPage() {
                       <input
                         type="text"
                         required
+                        value={cvv}
+                        onChange={(e) => setCvv(e.target.value)}
                         placeholder="123"
                         className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
                       />
@@ -169,11 +234,12 @@ export default function CheckoutPage() {
 
                   <button
                     type="submit"
-                    className="mt-6 w-full rounded-xl bg-green-600 py-4 font-bold text-lg transition hover:bg-green-500 active:scale-95"
+                    disabled={procesando}
+                    className="mt-6 w-full rounded-xl bg-green-600 py-4 font-bold text-lg transition hover:bg-green-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Pagar Q{totalConDescuento.toFixed(2)}
+                    {procesando ? "Procesando orden..." : `Pagar Q${totalConDescuento.toFixed(2)}`}
                   </button>
-                </form>
+                </div>
               </div>
             </div>
 
@@ -200,9 +266,11 @@ export default function CheckoutPage() {
                           <span className="text-sm font-black text-green-400">
                             Q{calcularPrecioFinal(producto).toFixed(2)}
                           </span>
-                          <span className="text-xs text-gray-500 line-through">
-                            Q{producto.precio.toFixed(2)}
-                          </span>
+                          {producto.descuento > 0 && (
+                            <span className="text-xs text-gray-500 line-through">
+                              Q{producto.precio.toFixed(2)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -233,7 +301,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </form>
         )}
       </div>
     </main>

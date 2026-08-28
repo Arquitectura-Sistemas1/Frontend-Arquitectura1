@@ -4,68 +4,65 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
-const productos = [
-  {
-    id: 1,
-    nombre: "EA SPORTS FC 26",
-    descripcion: "PC - Steam",
-    precio: 349.99,
-    descuento: 18,
-    imagen: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=600&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 2,
-    nombre: "Grand Theft Auto V",
-    descripcion: "PC - Rockstar Games",
-    precio: 199.99,
-    descuento: 25,
-    imagen: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 3,
-    nombre: "Minecraft",
-    descripcion: "PC - Microsoft",
-    precio: 299.99,
-    descuento: 15,
-    imagen: "https://images.unsplash.com/photo-1627856013091-fed6e4e30025?w=600&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 4,
-    nombre: "Cyberpunk 2077",
-    descripcion: "PC - GOG",
-    precio: 249.99,
-    descuento: 30,
-    imagen: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=600&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 5,
-    nombre: "Red Dead Redemption 2",
-    descripcion: "PC - Rockstar Games",
-    precio: 299.99,
-    descuento: 20,
-    imagen: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80",
-  },
-  {
-    id: 6,
-    nombre: "Forza Horizon 5",
-    descripcion: "PC - Xbox",
-    precio: 399.99,
-    descuento: 12,
-    imagen: "https://images.unsplash.com/photo-1552824722-15140b35416e?w=600&auto=format&fit=crop&q=80",
-  },
-];
-
-export type Producto = (typeof productos)[number];
+// Definición de la interfaz basada en tu Modelo Entidad-Relación y API
+export interface Producto {
+  id: number;
+  nombre: string;
+  descripcion: string; // Plataforma / Formato
+  precio: number;      // Obtenido de tbl_Tarifas (Precio_Venta)
+  descuento: number;   // Calculado o extraído de la tabla Descuentos
+  imagen: string;     // Obtenido de ImagenesVideojuego
+}
 
 export default function Home() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [carrito, setCarrito] = useState<Producto[]>([]);
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [juegoDetalle, setJuegoDetalle] = useState<Producto | null>(null);
   const [busqueda, setBusqueda] = useState("");
 
-  // Cargar datos iniciales desde localStorage tras montar en cliente
+  // 1. Cargar productos desde la API REST al montar el componente
+  useEffect(() => {
+    const fetchProductos = async () => {
+      try {
+        setLoading(true);
+        // Reemplaza esta URL con el endpoint real de tu backend/API
+        const response = await fetch("/api/productos");
+        
+        if (!response.ok) {
+          throw new Error("Error al obtener el catálogo de productos");
+        }
+        
+        const data = await response.json();
+
+        // Mapeo opcional si los nombres de la base de datos difieren de los de la UI:
+        const productosFormateados: Producto[] = data.map((item: any) => ({
+          id: item.ProductoID || item.id,
+          nombre: item.Titulo || item.nombre,
+          descripcion: item.Plataforma || item.descripcion || "Digital",
+          precio: Number(item.Precio_Venta || item.precio || 0),
+          descuento: Number(item.porcentaje_descuento || item.descuento || 0),
+          imagen: item.url_imagen || item.imagen || "https://via.placeholder.com/600",
+        }));
+
+        setProductos(productosFormateados);
+      } catch (err: any) {
+        console.error("Error cargando productos:", err);
+        setError(err.message || "Ocurrió un error inesperado");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProductos();
+  }, []);
+
+  // 2. Cargar datos iniciales del carrito desde localStorage
   useEffect(() => {
     setMounted(true);
     const dataGuardada = localStorage.getItem("carrito_nexus");
@@ -78,7 +75,7 @@ export default function Home() {
     }
   }, []);
 
-  // Guardar en localStorage cada vez que cambia el carrito
+  // 3. Sincronizar el carrito con localStorage al modificarse
   useEffect(() => {
     if (mounted) {
       localStorage.setItem("carrito_nexus", JSON.stringify(carrito));
@@ -134,6 +131,7 @@ export default function Home() {
               />
               {busqueda && (
                 <button
+                  type="button"
                   onClick={() => setBusqueda("")}
                   className="text-xs text-gray-400 hover:text-white"
                 >
@@ -151,12 +149,12 @@ export default function Home() {
               Categorías
             </a>
             <button
-           type="button"
-          onClick={() => router.push("/biblioteca")}
-           className="hidden text-sm text-gray-300 hover:text-white md:block"
->
-  Mi Biblioteca
-</button>
+              type="button"
+              onClick={() => router.push("/biblioteca")}
+              className="hidden text-sm text-gray-300 hover:text-white md:block"
+            >
+              Mi Biblioteca
+            </button>
 
             <button
               onClick={() => setMostrarCarrito(!mostrarCarrito)}
@@ -171,7 +169,6 @@ export default function Home() {
               )}
             </button>
 
-            {/* BOTÓN CONECTADO A /login */}
             <button 
               type="button" 
               onClick={() => router.push("/login")}
@@ -251,58 +248,78 @@ export default function Home() {
           </h2>
         </div>
 
-        {productosFiltrados.length === 0 ? (
+        {/* Muestra estado de carga */}
+        {loading && (
+          <div className="py-20 text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent align-[-0.125em]" />
+            <p className="mt-4 text-gray-400">Cargando catálogo...</p>
+          </div>
+        )}
+
+        {/* Muestra mensaje si hubo error */}
+        {error && !loading && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
+            <p> Error: {error}</p>
+          </div>
+        )}
+
+        {/* Lista de productos */}
+        {!loading && !error && productosFiltrados.length === 0 ? (
           <div className="py-12 text-center">
             <p className="text-lg text-gray-400">
               No se encontraron juegos que coincidan con tu búsqueda.
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {productosFiltrados.map((producto) => (
-              <article
-                key={producto.id}
-                className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
-              >
-                <div className="relative h-52 overflow-hidden bg-[#211A2D]">
-                  <img
-                    src={producto.imagen}
-                    alt={producto.nombre}
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
-                    -{producto.descuento}%
+          !loading && !error && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {productosFiltrados.map((producto) => (
+                <article
+                  key={producto.id}
+                  className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
+                >
+                  <div className="relative h-52 overflow-hidden bg-[#211A2D]">
+                    <img
+                      src={producto.imagen}
+                      alt={producto.nombre}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                    {producto.descuento > 0 && (
+                      <div className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
+                        -{producto.descuento}%
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <div className="p-5">
-                  <h3 className="text-lg font-bold group-hover:text-purple-400">
-                    {producto.nombre}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {producto.descripcion}
-                  </p>
+                  <div className="p-5">
+                    <h3 className="text-lg font-bold group-hover:text-purple-400">
+                      {producto.nombre}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {producto.descripcion}
+                    </p>
 
-                  <div className="mt-5 flex items-end justify-between">
-                    <div>
-                      <p className="text-xs text-gray-500">Desde</p>
-                      <span className="text-2xl font-black">
-                        Q{producto.precio.toFixed(2)}
-                      </span>
+                    <div className="mt-5 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500">Desde</p>
+                        <span className="text-2xl font-black">
+                          Q{producto.precio.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setJuegoDetalle(producto)}
+                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
+                      >
+                        Comprar
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setJuegoDetalle(producto)}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
-                    >
-                      Comprar
-                    </button>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          )
         )}
       </section>
 
@@ -332,9 +349,11 @@ export default function Home() {
                   alt={juegoDetalle.nombre}
                   className="h-full w-full object-cover"
                 />
-                <span className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
-                  -{juegoDetalle.descuento}% OFF
-                </span>
+                {juegoDetalle.descuento > 0 && (
+                  <span className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
+                    -{juegoDetalle.descuento}% OFF
+                  </span>
+                )}
               </div>
 
               <div className="mt-5">
