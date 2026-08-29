@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 
 interface Cliente {
   id: number;
@@ -21,12 +20,31 @@ interface Transaccion {
   estado: 'COMPLETADO' | 'PENDIENTE' | 'DEVUELTO';
 }
 
+interface Empleado {
+  id: number;
+  nombre: string;
+  puesto: string;
+  correo: string;
+  estado: 'ACTIVO' | 'ARCHIVADO';
+}
+
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'estadisticas' | 'clientes' | 'transacciones' | 'reportes'>('estadisticas');
+  const [activeTab, setActiveTab] = useState<'estadisticas' | 'clientes' | 'transacciones' | 'reportes' | 'empleados'>('estadisticas');
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // --- ESTADOS PARA CRUD EMPLEADOS ---
+  const [empleados, setEmpleados] = useState<Empleado[]>([
+    { id: 1, nombre: 'Marcos Solís', puesto: 'Soporte Técnico', correo: 'marcos@nexus.com', estado: 'ACTIVO' },
+    { id: 2, nombre: 'Lucía Gómez', puesto: 'Cajera / Ventas', correo: 'lucia@nexus.com', estado: 'ACTIVO' },
+    { id: 3, nombre: 'Roberto Cano', puesto: 'Inventario', correo: 'roberto@nexus.com', estado: 'ARCHIVADO' }
+  ]);
+
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [empleadoEditando, setEmpleadoEditando] = useState<Empleado | null>(null);
+  const [formData, setFormData] = useState({ nombre: '', puesto: '', correo: '' });
 
   const API_URL = 'http://localhost:8080/api';
 
@@ -49,7 +67,6 @@ export default function AdminDashboard() {
         setClientes(dataClientes);
         setTransacciones(dataTransacciones);
       } catch (err) {
-        // Carga datos locales de prueba si la API en Java no está activa
         setClientes([
           { id: 1, nombre: 'Carlos López', correo: 'carlos@gmail.com', estado: 'ACTIVO', comprasRealizadas: 5 },
           { id: 2, nombre: 'Ana Martínez', correo: 'ana.m@gmail.com', estado: 'ACTIVO', comprasRealizadas: 12 },
@@ -69,13 +86,72 @@ export default function AdminDashboard() {
     cargarDatos();
   }, []);
 
+  // --- FUNCIONES CRUD EMPLEADOS ---
+  const abrirModalCrear = () => {
+    setEmpleadoEditando(null);
+    setFormData({ nombre: '', puesto: '', correo: '' });
+    setIsModalOpen(true);
+  };
+
+  const abrirModalEditar = (emp: Empleado) => {
+    setEmpleadoEditando(emp);
+    setFormData({ nombre: emp.nombre, puesto: emp.puesto, correo: emp.correo });
+    setIsModalOpen(true);
+  };
+
+  const guardarEmpleado = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.nombre || !formData.puesto || !formData.correo) return;
+
+    if (empleadoEditando) {
+      // Editar
+      setEmpleados(empleados.map(emp => 
+        emp.id === empleadoEditando.id 
+          ? { ...emp, nombre: formData.nombre, puesto: formData.puesto, correo: formData.correo }
+          : emp
+      ));
+    } else {
+      // Crear nuevo
+      const nuevoEmpleado: Empleado = {
+        id: empleados.length > 0 ? Math.max(...empleados.map(e => e.id)) + 1 : 1,
+        nombre: formData.nombre,
+        puesto: formData.puesto,
+        correo: formData.correo,
+        estado: 'ACTIVO'
+      };
+      setEmpleados([...empleados, nuevoEmpleado]);
+    }
+
+    setIsModalOpen(false);
+  };
+
+  const alternarEstadoEmpleado = (id: number) => {
+    setEmpleados(empleados.map(emp => {
+      if (emp.id === id) {
+        return {
+          ...emp,
+          estado: emp.estado === 'ACTIVO' ? 'ARCHIVADO' : 'ACTIVO'
+        };
+      }
+      return emp;
+    }));
+  };
+
+  const descargarReportePDF = async (tipoReporte: string) => {
+    try {
+      alert(`Iniciando descarga del reporte PDF: ${tipoReporte}`);
+    } catch (error) {
+      console.error("Error al descargar el PDF:", error);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans">
       {/* SIDEBAR DE NAVEGACIÓN */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col justify-between">
         <div>
           <div className="mb-8 flex justify-center">
-            <img src="/logo.png" alt="Nexus Games Logo" className="max-h-24 w-auto object-contain" />
+            <img src="/logo.png" alt="Nexus Games Logo" className="h-16 w-auto object-contain" />
           </div>
 
           <nav className="space-y-2">
@@ -95,6 +171,15 @@ export default function AdminDashboard() {
               }`}
             >
               👥 Gestión Cliente
+            </button>
+
+            <button
+              onClick={() => setActiveTab('empleados')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition text-left text-sm ${
+                activeTab === 'empleados' ? 'bg-purple-900/40 text-purple-300 border border-purple-700/50 font-semibold' : 'text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              👔 Gestión Empleados
             </button>
 
             <button
@@ -192,7 +277,75 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 3. TRANSACCIONES */}
+            {/* 3. GESTIÓN EMPLEADOS (CON CRUD INTEGRADO) */}
+            {activeTab === 'empleados' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Gestión de Empleados</h2>
+                    <p className="text-slate-400 text-xs">Administra las cuentas de los colaboradores de Nexus Games.</p>
+                  </div>
+                  <button
+                    onClick={abrirModalCrear}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition"
+                  >
+                    + Agregar Empleado
+                  </button>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <table className="w-full text-left text-sm text-slate-300">
+                    <thead className="bg-slate-800/60 text-slate-400 uppercase text-xs">
+                      <tr>
+                        <th className="p-4">ID</th>
+                        <th className="p-4">Nombre</th>
+                        <th className="p-4">Correo</th>
+                        <th className="p-4">Puesto</th>
+                        <th className="p-4">Estado</th>
+                        <th className="p-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {empleados.map((emp) => (
+                        <tr key={emp.id} className="hover:bg-slate-800/40">
+                          <td className="p-4">#{emp.id}</td>
+                          <td className="p-4 font-medium text-white">{emp.nombre}</td>
+                          <td className="p-4 text-slate-400">{emp.correo}</td>
+                          <td className="p-4">{emp.puesto}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              emp.estado === 'ACTIVO' ? 'bg-lime-400/10 text-lime-400' : 'bg-red-400/10 text-red-400'
+                            }`}>
+                              {emp.estado}
+                            </span>
+                          </td>
+                          <td className="p-4 flex justify-center gap-2">
+                            <button
+                              onClick={() => abrirModalEditar(emp)}
+                              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg transition"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => alternarEstadoEmpleado(emp.id)}
+                              className={`px-3 py-1 text-xs rounded-lg transition ${
+                                emp.estado === 'ACTIVO' 
+                                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400' 
+                                  : 'bg-lime-500/10 hover:bg-lime-500/20 text-lime-400'
+                              }`}
+                            >
+                              {emp.estado === 'ACTIVO' ? 'Archivar' : 'Activar'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 4. TRANSACCIONES */}
             {activeTab === 'transacciones' && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-white">Historial Global de Transacciones</h2>
@@ -221,18 +374,35 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 4. REPORTES */}
+            {/* 5. REPORTES */}
             {activeTab === 'reportes' && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold text-white">Panel de Reportes</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-                    <h3 className="font-bold text-white">Reporte Financiero</h3>
-                    <button className="mt-4 w-full bg-purple-600 py-2 rounded text-xs font-bold">Exportar PDF</button>
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-lg">Reporte Financiero</h3>
+                      <p className="text-slate-400 text-xs mt-1">Resumen general de ingresos, rentas y ventas acumuladas.</p>
+                    </div>
+                    <button 
+                      onClick={() => descargarReportePDF('Financiero')}
+                      className="mt-6 w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg text-xs font-bold transition"
+                    >
+                      Exportar PDF
+                    </button>
                   </div>
-                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-                    <h3 className="font-bold text-white">Reporte de Clientes</h3>
-                    <button className="mt-4 w-full bg-purple-600 py-2 rounded text-xs font-bold">Exportar PDF</button>
+
+                  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-lg">Reporte de Clientes</h3>
+                      <p className="text-slate-400 text-xs mt-1">Listado detallado de actividad y estado de usuarios registrados.</p>
+                    </div>
+                    <button 
+                      onClick={() => descargarReportePDF('Clientes')}
+                      className="mt-6 w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-lg text-xs font-bold transition"
+                    >
+                      Exportar PDF
+                    </button>
                   </div>
                 </div>
               </div>
@@ -240,6 +410,71 @@ export default function AdminDashboard() {
           </>
         )}
       </main>
+
+      {/* --- MODAL CREAR / EDITAR EMPLEADO --- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-white">
+              {empleadoEditando ? 'Editar Empleado' : 'Agregar Nuevo Empleado'}
+            </h3>
+
+            <form onSubmit={guardarEmpleado} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Nombre Completo</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  placeholder="ej. Ana María Juárez"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Correo Electrónico</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.correo}
+                  onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
+                  placeholder="ej. ana@nexus.com"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Puesto / Rol</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.puesto}
+                  onChange={(e) => setFormData({ ...formData, puesto: e.target.value })}
+                  placeholder="ej. Atencion al cliente"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition"
+                >
+                  {empleadoEditando ? 'Guardar Cambios' : 'Crear Empleado'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
