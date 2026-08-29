@@ -30,6 +30,9 @@ interface Descuento {
 export default function Inventario() {
   const [seccion, setSeccion] = useState<Seccion>('juegos');
   const [mostrarFormularioJuego, setMostrarFormularioJuego] = useState(false);
+  const [mostrarFormularioTarifa, setMostrarFormularioTarifa] = useState(false);
+  const [mostrarFormularioDescuento, setMostrarFormularioDescuento] = useState(false);
+  
 
   // Datos temporales únicamente para mostrar el Frontend.
   // Backend reemplazará estos datos al conectar la API.
@@ -433,12 +436,96 @@ export default function Inventario() {
                 </p>
               </div>
 
-              <button className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold">
-                + Agregar tarifa
+              <button
+                 onClick={() => setMostrarFormularioTarifa(true)}
+                 className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold"
+              >
+              + Agregar tarifa
               </button>
 
             </div>
+{mostrarFormularioTarifa && (
+  <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
 
+    <div className="flex justify-between items-center mb-6">
+      <div>
+        <h3 className="text-xl font-bold text-white">
+          Agregar nueva tarifa
+        </h3>
+
+        <p className="text-sm text-slate-400">
+          Ingresa la información de la tarifa de renta.
+        </p>
+      </div>
+
+      <button
+        onClick={() => setMostrarFormularioTarifa(false)}
+        className="text-slate-400 hover:text-white"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Nombre de la tarifa
+        </label>
+
+        <input
+          type="text"
+          placeholder="Ej. Renta 3 días"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Precio
+        </label>
+
+        <input
+          type="number"
+          placeholder="0.00"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        />
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="block text-sm text-slate-300 mb-2">
+          Descripción
+        </label>
+
+        <textarea
+          placeholder="Ej. Renta del videojuego durante 3 días"
+          rows={3}
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500 resize-none"
+        />
+      </div>
+
+    </div>
+
+    <div className="flex justify-end gap-3 mt-6">
+
+      <button
+        onClick={() => setMostrarFormularioTarifa(false)}
+        className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
+      >
+        Guardar tarifa
+      </button>
+
+    </div>
+
+  </div>
+)}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
               {tarifas.map((tarifa) => (
@@ -490,11 +577,100 @@ export default function Inventario() {
                 </p>
               </div>
 
-              <button className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold">
-                + Agregar descuento
+              <button
+                onClick={() => setMostrarFormularioDescuento(true)}
+                className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold"
+              > 
+               + Agregar descuento
               </button>
 
             </div>
+            
+            {mostrarFormularioDescuento && (
+  <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+
+    <div className="flex justify-between items-center mb-6">
+      <div>
+        <h3 className="text-xl font-bold text-white">
+          Agregar nuevo descuento
+        </h3>
+
+        <p className="text-sm text-slate-400">
+          Ingresa la información de la promoción o descuento.
+        </p>
+      </div>
+
+      <button
+        onClick={() => setMostrarFormularioDescuento(false)}
+        className="text-slate-400 hover:text-white"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Nombre del descuento
+        </label>
+
+        <input
+          type="text"
+          placeholder="Ej. Oferta de fin de semana"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Porcentaje de descuento
+        </label>
+
+        <input
+          type="number"
+          min="0"
+          max="100"
+          placeholder="Ej. 15"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Estado
+        </label>
+
+        <select
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        >
+          <option>ACTIVO</option>
+          <option>INACTIVO</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div className="flex justify-end gap-3 mt-6">
+
+      <button
+        onClick={() => setMostrarFormularioDescuento(false)}
+        className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
+      >
+        Guardar descuento
+      </button>
+
+    </div>
+
+  </div>
+)}
 
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
 
