@@ -1,6 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
 
 interface Cliente {
   id: number;
@@ -28,6 +40,26 @@ interface Empleado {
   estado: 'ACTIVO' | 'ARCHIVADO';
 }
 
+// Datos de prueba para los gráficos
+const datosIngresosMensuales = [
+  { mes: 'Ene', ventas: 12400, rentas: 2100 },
+  { mes: 'Feb', ventas: 15300, rentas: 2800 },
+  { mes: 'Mar', ventas: 18100, rentas: 3200 },
+  { mes: 'Abr', ventas: 14200, rentas: 2900 },
+  { mes: 'May', ventas: 21000, rentas: 3800 },
+  { mes: 'Jun', ventas: 19500, rentas: 3500 },
+  { mes: 'Jul', ventas: 22800, rentas: 4000 },
+  { mes: 'Ago', ventas: 24850, rentas: 4120 },
+];
+
+const datosCategorias = [
+  { categoria: 'Acción', ventas: 45, rentas: 28 },
+  { categoria: 'RPGs', ventas: 32, rentas: 15 },
+  { categoria: 'Deportes', ventas: 28, rentas: 40 },
+  { categoria: 'Estrategia', ventas: 18, rentas: 10 },
+  { categoria: 'Aventura', ventas: 38, rentas: 22 },
+];
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'estadisticas' | 'clientes' | 'transacciones' | 'reportes' | 'empleados'>('estadisticas');
 
@@ -35,13 +67,14 @@ export default function AdminDashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // --- ESTADOS PARA CRUD EMPLEADOS ---
+  // --- ESTADOS PARA EMPLEADOS ---
   const [empleados, setEmpleados] = useState<Empleado[]>([
     { id: 1, nombre: 'Marcos Solís', puesto: 'Soporte Técnico', correo: 'marcos@nexus.com', estado: 'ACTIVO' },
     { id: 2, nombre: 'Lucía Gómez', puesto: 'Cajera / Ventas', correo: 'lucia@nexus.com', estado: 'ACTIVO' },
     { id: 3, nombre: 'Roberto Cano', puesto: 'Inventario', correo: 'roberto@nexus.com', estado: 'ARCHIVADO' }
   ]);
 
+  const [busquedaEmpleado, setBusquedaEmpleado] = useState('');
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [empleadoEditando, setEmpleadoEditando] = useState<Empleado | null>(null);
   const [formData, setFormData] = useState({ nombre: '', puesto: '', correo: '' });
@@ -86,7 +119,7 @@ export default function AdminDashboard() {
     cargarDatos();
   }, []);
 
-  // --- FUNCIONES CRUD EMPLEADOS ---
+  // --- CRUD EMPLEADOS ---
   const abrirModalCrear = () => {
     setEmpleadoEditando(null);
     setFormData({ nombre: '', puesto: '', correo: '' });
@@ -104,14 +137,12 @@ export default function AdminDashboard() {
     if (!formData.nombre || !formData.puesto || !formData.correo) return;
 
     if (empleadoEditando) {
-      // Editar
       setEmpleados(empleados.map(emp => 
         emp.id === empleadoEditando.id 
           ? { ...emp, nombre: formData.nombre, puesto: formData.puesto, correo: formData.correo }
           : emp
       ));
     } else {
-      // Crear nuevo
       const nuevoEmpleado: Empleado = {
         id: empleados.length > 0 ? Math.max(...empleados.map(e => e.id)) + 1 : 1,
         nombre: formData.nombre,
@@ -137,6 +168,12 @@ export default function AdminDashboard() {
     }));
   };
 
+  const empleadosFiltrados = empleados.filter(e => 
+    e.nombre.toLowerCase().includes(busquedaEmpleado.toLowerCase()) ||
+    e.correo.toLowerCase().includes(busquedaEmpleado.toLowerCase()) ||
+    e.puesto.toLowerCase().includes(busquedaEmpleado.toLowerCase())
+  );
+
   const descargarReportePDF = async (tipoReporte: string) => {
     try {
       alert(`Iniciando descarga del reporte PDF: ${tipoReporte}`);
@@ -151,7 +188,7 @@ export default function AdminDashboard() {
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col justify-between">
         <div>
           <div className="mb-8 flex justify-center">
-            <img src="/logo.png" alt="Nexus Games Logo" className="h-16 w-auto object-contain" />
+            <img src="/logo.png" alt="Nexus Games Logo" className="h-24 w-auto object-contain" />
           </div>
 
           <nav className="space-y-2">
@@ -216,13 +253,15 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/* 1. ESTADÍSTICAS */}
+            {/* 1. ESTADÍSTICAS CON GRÁFICOS */}
             {activeTab === 'estadisticas' && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-2xl font-bold text-white">Panel de Estadísticas Globales</h2>
                   <p className="text-slate-400 text-sm">Resumen de ingresos, actividad y métricas clave del sistema.</p>
                 </div>
+
+                {/* TARJETAS DE MÉTRICAS */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
                     <span className="text-xs font-semibold uppercase text-slate-400">Ventas Totales</span>
@@ -240,6 +279,68 @@ export default function AdminDashboard() {
                     <span className="text-xs font-semibold uppercase text-slate-400">Rentabilidad</span>
                     <p className="text-2xl font-extrabold text-amber-400 mt-2">88.5%</p>
                   </div>
+                </div>
+
+                {/* SECCIÓN DE GRÁFICOS */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* GRÁFICO 1: TENDENCIA DE INGRESOS (ÁREA / LÍNEAS) */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+                    <div>
+                      <h3 className="font-bold text-white text-base">Tendencia de Ingresos Mensuales</h3>
+                      <p className="text-slate-400 text-xs">Comparativa entre ventas directas e ingresos por rentas (Q)</p>
+                    </div>
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={datosIngresosMensuales} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#a3e635" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#a3e635" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorRentas" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#c084fc" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#c084fc" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
+                          <YAxis stroke="#94a3b8" fontSize={12} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                            formatter={(value: any) => [`Q ${value}`, '']}
+                          />
+                          <Legend />
+                          <Area type="monotone" dataKey="ventas" name="Ventas" stroke="#a3e635" fillOpacity={1} fill="url(#colorVentas)" />
+                          <Area type="monotone" dataKey="rentas" name="Rentas" stroke="#c084fc" fillOpacity={1} fill="url(#colorRentas)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* GRÁFICO 2: ACTIVIDAD POR CATEGORÍA (BARRAS) */}
+                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+                    <div>
+                      <h3 className="font-bold text-white text-base">Operaciones por Categoría de Juego</h3>
+                      <p className="text-slate-400 text-xs">Número de unidades vendidas vs. rentadas por género</p>
+                    </div>
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={datosCategorias} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="categoria" stroke="#94a3b8" fontSize={12} />
+                          <YAxis stroke="#94a3b8" fontSize={12} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                          />
+                          <Legend />
+                          <Bar dataKey="ventas" name="Ventas Directas" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="rentas" name="Rentas de Juegos" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             )}
@@ -277,20 +378,30 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 3. GESTIÓN EMPLEADOS (CON CRUD INTEGRADO) */}
+            {/* 3. GESTIÓN EMPLEADOS */}
             {activeTab === 'empleados' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-bold text-white">Gestión de Empleados</h2>
                     <p className="text-slate-400 text-xs">Administra las cuentas de los colaboradores de Nexus Games.</p>
                   </div>
-                  <button
-                    onClick={abrirModalCrear}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition"
-                  >
-                    + Agregar Empleado
-                  </button>
+                  
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      placeholder="Buscar empleado..."
+                      value={busquedaEmpleado}
+                      onChange={(e) => setBusquedaEmpleado(e.target.value)}
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 w-48"
+                    />
+                    <button
+                      onClick={abrirModalCrear}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition"
+                    >
+                      + Agregar Empleado
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -306,7 +417,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
-                      {empleados.map((emp) => (
+                      {empleadosFiltrados.map((emp) => (
                         <tr key={emp.id} className="hover:bg-slate-800/40">
                           <td className="p-4">#{emp.id}</td>
                           <td className="p-4 font-medium text-white">{emp.nombre}</td>
@@ -411,7 +522,7 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      {/* --- MODAL CREAR / EDITAR EMPLEADO --- */}
+      {/* MODAL EMPLEADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
@@ -451,7 +562,7 @@ export default function AdminDashboard() {
                   required
                   value={formData.puesto}
                   onChange={(e) => setFormData({ ...formData, puesto: e.target.value })}
-                  placeholder="ej. Atencion al cliente"
+                  placeholder="ej. Atención al cliente"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
                 />
               </div>
