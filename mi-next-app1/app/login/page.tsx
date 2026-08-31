@@ -2,17 +2,45 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+
+  
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Iniciando sesión con:", { email, password });
-    // Tras autenticar con éxito, redirige a la página principal
-    router.push("/");
+    setError(null);
+    setCargando(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Usuario o contraseña incorrectos.");
+      }
+
+      
+      router.push("/");
+    } catch (err: any) {
+      console.error("Error al iniciar sesión:", err);
+      setError(err.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
@@ -38,18 +66,26 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        {/* NOTIFICACIÓN DE ERROR */}
+        {error && (
+          <div className="mt-6 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-center text-xs font-semibold text-red-400">
+            ⚠️ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-300">
-              Correo Electrónico
+              Usuario o Correo
             </label>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-              className="mt-2 w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+              disabled={cargando}
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              placeholder="gamer_nexus"
+              className="mt-2 w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition disabled:opacity-50"
             />
           </div>
 
@@ -60,26 +96,28 @@ export default function LoginPage() {
             <input
               type="password"
               required
+              disabled={cargando}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="mt-2 w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+              className="mt-2 w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition disabled:opacity-50"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white transition hover:bg-purple-500 active:scale-95 shadow-lg shadow-purple-950"
+            disabled={cargando}
+            className="w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white transition hover:bg-purple-500 active:scale-95 shadow-lg shadow-purple-950 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Iniciar Sesión
+            {cargando ? "Iniciando sesión..." : "Iniciar Sesión"}
           </button>
         </form>
 
         <p className="mt-6 text-center text-xs text-gray-500">
           ¿No tienes una cuenta?{" "}
-          <a href="#" className="text-green-400 hover:underline">
+          <Link href="/registro" className="text-green-500 font-semibold hover:underline transition">
             Regístrate aquí
-          </a>
+          </Link>
         </p>
       </div>
     </main>
