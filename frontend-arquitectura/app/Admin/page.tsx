@@ -32,7 +32,6 @@ interface Transaccion {
   estado: 'COMPLETADO' | 'PENDIENTE' | 'DEVUELTO';
 }
 
-// Actualizacion de datos de empleados con campos adicionales
 interface Empleado {
   id: number;
   nombres: string;
@@ -46,7 +45,6 @@ interface Empleado {
   estado: 'ACTIVO' | 'ARCHIVADO';
 }
 
-// Datos de prueba para los gráficos
 const datosIngresosMensuales = [
   { mes: 'Ene', ventas: 12400, rentas: 2100 },
   { mes: 'Feb', ventas: 15300, rentas: 2800 },
@@ -73,7 +71,9 @@ export default function AdminDashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // ESTADOS ACTUALIZADOS PARA EMPLEADOS 
+  // ESTADO PARA EL FILTRO DENTRO DE TRANSACCIONES
+  const [filtroTipoTransaccion, setFiltroTipoTransaccion] = useState<'TODAS' | 'VENTA' | 'RENTA'>('TODAS');
+
   const [empleados, setEmpleados] = useState<Empleado[]>([
     {
       id: 1,
@@ -117,7 +117,6 @@ export default function AdminDashboard() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [empleadoEditando, setEmpleadoEditando] = useState<Empleado | null>(null);
 
-  // Formulario adaptado a todos los campos requeridos
   const [formData, setFormData] = useState({
     nombres: '',
     apellidos: '',
@@ -159,7 +158,8 @@ export default function AdminDashboard() {
         setTransacciones([
           { id: 'TX-1001', cliente: 'Carlos López', tipo: 'VENTA', juego: 'Call of Duty: Modern Warfare', monto: 350.00, fecha: '2026-08-25', estado: 'COMPLETADO' },
           { id: 'TX-1002', cliente: 'Ana Martínez', tipo: 'RENTA', juego: 'Helldivers 2', monto: 45.00, fecha: '2026-08-26', estado: 'COMPLETADO' },
-          { id: 'TX-1003', cliente: 'Juan Pérez', tipo: 'VENTA', juego: 'Roblox Gift Card', monto: 100.00, fecha: '2026-08-27', estado: 'PENDIENTE' }
+          { id: 'TX-1003', cliente: 'Juan Pérez', tipo: 'VENTA', juego: 'Roblox Gift Card', monto: 100.00, fecha: '2026-08-27', estado: 'PENDIENTE' },
+          { id: 'TX-1004', cliente: 'Carlos López', tipo: 'RENTA', juego: 'EA Sports FC 25', monto: 60.00, fecha: '2026-08-28', estado: 'COMPLETADO' }
         ]);
       } finally {
         setLoading(false);
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
     cargarDatos();
   }, []);
 
-  // CRUD de empleados 
+  // CRUD DE EMPLEADOS
   const abrirModalCrear = () => {
     setEmpleadoEditando(null);
     setFormData({
@@ -252,6 +252,20 @@ export default function AdminDashboard() {
     e.cui.includes(busquedaEmpleado)
   );
 
+  // FILTRADO Y CÁLCULOS DE TRANSACCIONES
+  const transaccionesFiltradas = transacciones.filter(tx => {
+    if (filtroTipoTransaccion === 'TODAS') return true;
+    return tx.tipo === filtroTipoTransaccion;
+  });
+
+  const totalVentas = transacciones
+    .filter(t => t.tipo === 'VENTA')
+    .reduce((acc, t) => acc + t.monto, 0);
+
+  const totalRentas = transacciones
+    .filter(t => t.tipo === 'RENTA')
+    .reduce((acc, t) => acc + t.monto, 0);
+
   const descargarReportePDF = async (tipoReporte: string) => {
     try {
       alert(`Iniciando descarga del reporte PDF: ${tipoReporte}`);
@@ -262,7 +276,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans">
-      {/* SIDEBAR DE NAVEGACIÓN */}
+      {/* SIDEBAR */}
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col justify-between">
         <div>
           <div className="mb-8 flex justify-center">
@@ -331,7 +345,7 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/*ESTADÍSTICAS CON GRÁFICOS */}
+            {/* 1. ESTADÍSTICAS */}
             {activeTab === 'estadisticas' && (
               <div className="space-y-6">
                 <div>
@@ -339,7 +353,6 @@ export default function AdminDashboard() {
                   <p className="text-slate-400 text-sm">Resumen de ingresos, actividad y métricas clave del sistema.</p>
                 </div>
 
-                {/* TARJETAS DE MÉTRICAS */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
                     <span className="text-xs font-semibold uppercase text-slate-400">Ventas Totales</span>
@@ -359,7 +372,6 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* SECCIÓN DE GRÁFICOS */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
                     <div>
@@ -452,7 +464,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 3. GESTIÓN EMPLEADOS TABLA CON COLUMNAS ACTUALIZADAS */}
+            {/* 3. GESTIÓN EMPLEADOS */}
             {activeTab === 'empleados' && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -540,29 +552,99 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 4. TRANSACCIONES */}
+            {/* 4. HISTORIAL DE TRANSACCIONES (DIVIDIDO EN RENTAS Y VENTAS EN LA MISMA VISTA) */}
             {activeTab === 'transacciones' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Historial Global de Transacciones</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Historial Global de Transacciones</h2>
+                    <p className="text-slate-400 text-xs">Filtra y revisa las compras directas y alquileres de la plataforma.</p>
+                  </div>
+
+                  {/* SUB-PESTAÑAS/FILTROS DENTRO DE LA MISMA VISTA */}
+                  <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                    <button
+                      onClick={() => setFiltroTipoTransaccion('TODAS')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                        filtroTipoTransaccion === 'TODAS'
+                          ? 'bg-purple-600 text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Todas ({transacciones.length})
+                    </button>
+                    <button
+                      onClick={() => setFiltroTipoTransaccion('VENTA')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                        filtroTipoTransaccion === 'VENTA'
+                          ? 'bg-lime-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Ventas (Q {totalVentas.toFixed(2)})
+                    </button>
+                    <button
+                      onClick={() => setFiltroTipoTransaccion('RENTA')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition ${
+                        filtroTipoTransaccion === 'RENTA'
+                          ? 'bg-purple-400 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Rentas (Q {totalRentas.toFixed(2)})
+                    </button>
+                  </div>
+                </div>
+
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                   <table className="w-full text-left text-sm text-slate-300">
                     <thead className="bg-slate-800/60 text-slate-400 uppercase text-xs">
                       <tr>
                         <th className="p-4">ID Transacción</th>
                         <th className="p-4">Cliente</th>
+                        <th className="p-4">Juego</th>
                         <th className="p-4">Tipo</th>
-                        <th className="p-4">Monto</th>
+                        <th className="p-4">Fecha</th>
+                        <th className="p-4">Estado</th>
+                        <th className="p-4 text-right">Monto</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
-                      {transacciones.map((tx) => (
-                        <tr key={tx.id}>
-                          <td className="p-4">{tx.id}</td>
-                          <td className="p-4 font-medium text-white">{tx.cliente}</td>
-                          <td className="p-4">{tx.tipo}</td>
-                          <td className="p-4 font-bold text-lime-400">Q {tx.monto.toFixed(2)}</td>
+                      {transaccionesFiltradas.length > 0 ? (
+                        transaccionesFiltradas.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-800/30 transition">
+                            <td className="p-4 font-mono text-xs text-slate-400">{tx.id}</td>
+                            <td className="p-4 font-medium text-white">{tx.cliente}</td>
+                            <td className="p-4 text-slate-300">{tx.juego}</td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider ${
+                                  tx.tipo === 'VENTA'
+                                    ? 'bg-lime-400/10 text-lime-400 border border-lime-400/20'
+                                    : 'bg-purple-400/10 text-purple-300 border border-purple-400/20'
+                                }`}
+                              >
+                                {tx.tipo}
+                              </span>
+                            </td>
+                            <td className="p-4 text-xs text-slate-400">{tx.fecha}</td>
+                            <td className="p-4">
+                              <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">
+                                {tx.estado}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right font-bold text-white">
+                              Q {tx.monto.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-500 text-sm">
+                            No se encontraron transacciones del tipo seleccionado.
+                          </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
