@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 
 const productos = [
   {
@@ -87,16 +88,23 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#100C18] text-white">
       {/* ================= NAVBAR ================= */}
-      <header className="sticky top-0 z-40 border-b border-purple-900/30 bg-[#100C18]/95 backdrop-blur">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-700">
-              🎮
-            </div>
-            <span className="text-2xl font-bold">
-              NEXUS<span className="text-green-500">GAMING</span>
-            </span>
-          </div>
+<header className="sticky top-0 z-40 border-b border-purple-900/30 bg-[#100C18]/95 backdrop-blur">
+  <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+    <div className="flex items-center gap-3">
+      <div className="relative flex h-30 w-30 items-center justify-center overflow-hidden rounded-xl">
+        <Image
+      src="/logo.png"
+      alt="Nexus Gaming Logo"
+      fill
+      className="object-contain p-1"
+    />
+      </div>
+
+      <span className="text-2xl font-bold tracking-tight">
+        NEXUS<span className="text-green-500">GAMES</span>
+      </span>
+    </div>
+          
 
           <div className="hidden w-[400px] md:block">
             <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3">
@@ -108,6 +116,7 @@ export default function Home() {
               />
             </div>
           </div>
+        
 
           <nav className="flex items-center gap-5">
             <a href="#productos" className="hidden text-sm text-gray-300 hover:text-white md:block">
@@ -160,6 +169,17 @@ export default function Home() {
               Ver ofertas
             </a>
           </div>
+        {/* Columna Derecha: Imagen Mascota */}
+      <div className="flex justify-center md:justify-end">
+        <div className="relative -mt-110 -mr-40 h-[1000px] w-full max-w-[1000px] sm:h-[450px] lg:-mt-110">
+          <img
+            src="/chispudo.png"
+            alt="Mascota Nexus Games"
+            className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(168,85,247,0.3)]"
+          />
+        </div>
+      </div>
+
         </div>
       </section>
 
