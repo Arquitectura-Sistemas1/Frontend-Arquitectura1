@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,11 +56,19 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md rounded-2xl border border-purple-900/40 bg-[#181323] p-8 shadow-2xl">
         <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-purple-700 text-2xl">
-            🎮
-          </div>
+          <center>
+         <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl">
+                 <Image
+                   src="/logo.png" 
+                   alt="Nexus Gaming Logo"
+                   width={1500}
+                   height={150}
+                   className="object-contain p-1"
+                 />
+               </div>
+          </center>
           <h1 className="text-2xl font-bold">
-            NEXUS<span className="text-green-500">GAMING</span>
+            NEXUS<span className="text-green-500">GAMES</span>
           </h1>
           <p className="mt-2 text-sm text-gray-400">
             Ingresa a tu cuenta para continuar
