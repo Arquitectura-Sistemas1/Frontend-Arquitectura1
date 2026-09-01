@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 // Definición de la interfaz basada en tu Modelo Entidad-Relación y API
 export interface Producto {
@@ -109,15 +110,22 @@ export default function Home() {
     <main className="min-h-screen bg-[#100C18] text-white">
       {/* ================= NAVBAR ================= */}
       <header className="sticky top-0 z-40 border-b border-purple-900/30 bg-[#100C18]/95 backdrop-blur">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-700">
-              🎮
-            </div>
-            <span className="text-2xl font-bold">
-              NEXUS<span className="text-green-500">GAMING</span>
-            </span>
-          </div>
+  <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+    <div className="flex items-center gap-3">
+      <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl">
+        <Image
+          src="/logo.png" 
+          alt="Nexus Gaming Logo"
+          width={100}
+          height={100}
+          className="object-contain p-1"
+        />
+      </div>
+
+      <span className="text-2xl font-bold tracking-tight">
+        NEXUS<span className="text-green-500">GAMES</span>
+      </span>
+    </div>
 
           <div className="hidden w-[400px] md:block">
             <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 focus-within:border-purple-500">
@@ -203,6 +211,16 @@ export default function Home() {
               Ver ofertas
             </a>
           </div>
+          {/*Imagen Mascota */}
+      <div className="flex justify-center md:justify-end">
+        <div className="relative -mt-500 h-[370px] w-full max-w-[480px] sm:h-[500px] lg:-mt-120">
+          <img
+            src="/chispudo.png"
+            alt="Mascota Nexus Games"
+            className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(168,85,247,0.3)]"
+          />
+        </div>
+      </div>
         </div>
       </section>
 
