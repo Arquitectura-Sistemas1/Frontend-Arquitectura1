@@ -17,32 +17,39 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setCargando(true);
+  e.preventDefault();
+  setError(null);
+  setCargando(true);
 
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usuario, password }),
-      });
+  try {
+    const res = await fetch("https://sedation-scribe-state.ngrok-free.dev/auth/login", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        // Si te da error de pantalla de advertencia de ngrok al hacer fetch,
+        // puedes descomentar la siguiente línea:
+        // "ngrok-skip-browser-warning": "69420"
+      },
+      body: JSON.stringify({ 
+        usuario: usuario, 
+        psswd: password // Mapeado exacto a la key 'psswd' que requiere el backend
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.message || "Usuario o contraseña incorrectos.");
-      }
-
-      
-      router.push("/");
-    } catch (err: any) {
-      console.error("Error al iniciar sesión:", err);
-      setError(err.message || "No se pudo conectar con el servidor.");
-    } finally {
-      setCargando(false);
+    if (!res.ok) {
+      throw new Error(data.message || "Usuario o contraseña incorrectos.");
     }
-  };
+
+    router.push("/");
+  } catch (err: any) {
+    console.error("Error al iniciar sesión:", err);
+    setError(err.message || "No se pudo conectar con el servidor.");
+  } finally {
+    setCargando(false);
+  }
+};
 
   return (
     <main className="min-h-screen bg-[#100C18] text-white flex items-center justify-center p-6 relative">

@@ -9,41 +9,47 @@ interface Pais {
   nombre: string;
 }
 
+const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
+
 export default function RegistroPage() {
   const router = useRouter();
 
-  
   const [paso, setPaso] = useState<1 | 2>(1);
 
- 
   const [paises, setPaises] = useState<Pais[]>([]);
 
- 
+  // Datos Paso 1
   const [nombres, setNombres] = useState("");
   const [apellidos, setApellidos] = useState("");
-  const [fechaNacimiento, setFechaNacimiento] = useState(""); 
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [correo, setCorreo] = useState("");
   const [paisId, setPaisId] = useState<string>("");
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [telefono, setTelefono] = useState("");
 
-  
+  // Datos Paso 2
   const [codigo, setCodigo] = useState("");
 
-  
+  // Estados de interfaz
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
-  
+  // Carga inicial de países desde FastAPI
   useEffect(() => {
     async function cargarPaises() {
       try {
-        const res = await fetch("/api/paises");
+        const res = await fetch(`${NGROK_BASE_URL}/paises`, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+        });
         if (res.ok) {
           const data = await res.json();
-          setPaises(data);
+          setPaises(Array.isArray(data) ? data : data.data || []);
         }
       } catch (err) {
         console.error("Error al cargar la lista de países:", err);
@@ -52,7 +58,7 @@ export default function RegistroPage() {
     cargarPaises();
   }, []);
 
-  
+  // Handler Paso 1: Creación de Solicitud de Registro
   async function manejarFormulario1(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -64,25 +70,29 @@ export default function RegistroPage() {
         apellidos,
         fecha_nacimiento: fechaNacimiento,
         correo,
-        pais_id: paisId,
+        pais_id: Number(paisId),
         usuario,
         password,
         telefono,
       };
 
-      const res = await fetch("/api/auth/registro-paso1", {
+      const res = await fetch(`${NGROK_BASE_URL}/auth/solicitud-usuario`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify(payloadForm1),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Error al procesar la solicitud inicial.");
+        throw new Error(data.detail || data.message || "Error al procesar la solicitud inicial.");
       }
 
-      
+      // Éxito en Paso 1, avanzamos al Paso 2
       setPaso(2);
     } catch (err: any) {
       setError(err.message || "Solicitud fallida. Revisa los datos ingresados.");
@@ -91,7 +101,7 @@ export default function RegistroPage() {
     }
   }
 
-  
+  // Handler Paso 2: Confirmación con Código de Verificación
   async function manejarFormulario2(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -99,30 +109,31 @@ export default function RegistroPage() {
 
     try {
       const payloadForm2 = {
-        usuario, 
+        usuario, // Reutiliza el estado guardado del paso 1
         codigo,
       };
 
-      const res = await fetch("/api/auth/registro-paso2", {
+      const res = await fetch(`${NGROK_BASE_URL}/auth/confirmar-registro`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify(payloadForm2),
       });
 
       const jsonResponse = await res.json();
 
       if (!res.ok) {
-        throw new Error(jsonResponse.message || "El código ingresado es incorrecto o expiró.");
+        throw new Error(jsonResponse.detail || jsonResponse.message || "El código ingresado es incorrecto o expiró.");
       }
 
-      
       setMensajeExito(jsonResponse.message || "¡Cuenta creada exitosamente!");
 
-      
       setTimeout(() => {
-        router.push("/");
+        router.push("/login");
       }, 2000);
-
     } catch (err: any) {
       setError(err.message || "No se pudo verificar el código.");
     } finally {
@@ -154,7 +165,6 @@ export default function RegistroPage() {
           {paso === 1 ? "Registro de Nuevo Cliente" : "Verificación de Cuenta"}
         </h1>
 
-        {}
         {mensajeExito && (
           <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-4 text-center text-sm font-semibold text-green-400">
             🎉 {mensajeExito}
@@ -294,7 +304,7 @@ export default function RegistroPage() {
               disabled={cargando}
               className="mt-6 w-full rounded-xl bg-purple-600 py-3.5 font-bold text-white transition hover:bg-purple-500 disabled:opacity-50"
             >
-              {cargando ? "Procesando Formulario 1..." : "Siguiente paso →"}
+              {cargando ? "Enviando solicitud..." : "Siguiente paso →"}
             </button>
           </form>
         )}
@@ -325,7 +335,7 @@ export default function RegistroPage() {
               disabled={cargando || !!mensajeExito}
               className="mt-6 w-full rounded-xl bg-green-600 py-3.5 font-bold text-white transition hover:bg-green-500 disabled:opacity-50"
             >
-              {cargando ? "Verificando Formulario 2..." : "Finalizar Registro"}
+              {cargando ? "Confirmando código..." : "Finalizar Registro"}
             </button>
           </form>
         )}

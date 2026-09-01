@@ -5,14 +5,21 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
-// Definición de la interfaz basada en tu Modelo Entidad-Relación y API
 export interface Producto {
   id: number;
   nombre: string;
-  descripcion: string; // Plataforma / Formato
-  precio: number;      // Obtenido de tbl_Tarifas (Precio_Venta)
-  descuento: number;   // Calculado o extraído de la tabla Descuentos
-  imagen: string;     // Obtenido de ImagenesVideojuego
+  titulo: string;
+  descripcion: string;
+  precio: number;
+  descuento: number;
+  imagen: string;
+  portada_url: string;
+  genero_nombre: string;
+  desarrolladora_nombre: string;
+  edicion: string;
+  clasificacion_nombre: string;
+  numero_jugadores: number;
+  fecha_lanzamiento: string;
 }
 
 export default function Home() {
@@ -27,43 +34,79 @@ export default function Home() {
   const [juegoDetalle, setJuegoDetalle] = useState<Producto | null>(null);
   const [busqueda, setBusqueda] = useState("");
 
-  // 1. Cargar productos desde la API REST al montar el componente
+  // 1. Cargar productos desde la API
   useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        setLoading(true);
-        // Reemplaza esta URL con el endpoint real de tu backend/API
-        const response = await fetch("/api/productos");
-        
-        if (!response.ok) {
-          throw new Error("Error al obtener el catálogo de productos");
+  const fetchProductos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(
+        "https://sedation-scribe-state.ngrok-free.dev/inv/videojuegos",
+        {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
         }
-        
-        const data = await response.json();
+      );
 
-        // Mapeo opcional si los nombres de la base de datos difieren de los de la UI:
-        const productosFormateados: Producto[] = data.map((item: any) => ({
-          id: item.ProductoID || item.id,
-          nombre: item.Titulo || item.nombre,
-          descripcion: item.Plataforma || item.descripcion || "Digital",
-          precio: Number(item.Precio_Venta || item.precio || 0),
-          descuento: Number(item.porcentaje_descuento || item.descuento || 0),
-          imagen: item.url_imagen || item.imagen || "https://via.placeholder.com/600",
-        }));
-
-        setProductos(productosFormateados);
-      } catch (err: any) {
-        console.error("Error cargando productos:", err);
-        setError(err.message || "Ocurrió un error inesperado");
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: No se pudo obtener el catálogo`);
       }
-    };
 
-    fetchProductos();
-  }, []);
+      const data = await response.json();
+      console.log("Respuesta API Ngrok:", data);
 
-  // 2. Cargar datos iniciales del carrito desde localStorage
+      const items = Array.isArray(data) ? data : data.data || [];
+
+      const productosFormateados: Producto[] = items.map((item: any, idx: number) => {
+        const tituloVal = item.titulo || "Sin título";
+        
+        // Reemplazamos portadas dummy que traigan "cdn.ejemplo.com" por un placeholder funcional
+        const imagenRaw = item.portada_url || "";
+        const imagenVal = (imagenRaw && !imagenRaw.includes("cdn.ejemplo.com"))
+          ? imagenRaw
+          : "https://placehold.co/400x300?text=Sin+Portada";
+
+        return {
+          id: Number(item.id || idx + 1),
+          nombre: String(tituloVal),
+          titulo: String(tituloVal),
+          descripcion: String(item.descripcion || ""),
+          
+          // Precio fijo temporal mientras FastAPI envía el campo real
+          precio: 299.99,
+          descuento: 0,
+
+          imagen: String(imagenVal),
+          portada_url: String(imagenVal),
+          
+          // Mapeo directo contra los atributos de FastAPI
+          genero_nombre: String(item.genero_nombre || "General"),
+          desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
+          edicion: String(item.edicion || "Estándar"),
+          clasificacion_nombre: String(item.clasificacion_nombre || "General"),
+          numero_jugadores: Number(item.numero_jugadores || 1),
+          fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
+          idioma: String(item.idioma || "N/A"),
+        };
+      });
+
+      setProductos(productosFormateados);
+    } catch (err: any) {
+      console.error("Error cargando productos:", err);
+      setError(err.message || "Ocurrió un error inesperado al conectar con el servidor");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchProductos();
+}, []);
+
+  // 2. Cargar datos del carrito desde localStorage
   useEffect(() => {
     setMounted(true);
     const dataGuardada = localStorage.getItem("carrito_nexus");
@@ -71,12 +114,12 @@ export default function Home() {
       try {
         setCarrito(JSON.parse(dataGuardada));
       } catch (e) {
-        console.error("Error al parsear el carrito guardado", e);
+        console.error("Error al parsear el carrito", e);
       }
     }
   }, []);
 
-  // 3. Sincronizar el carrito con localStorage al modificarse
+  // 3. Sincronizar el carrito con localStorage
   useEffect(() => {
     if (mounted) {
       localStorage.setItem("carrito_nexus", JSON.stringify(carrito));
@@ -100,11 +143,17 @@ export default function Home() {
     0
   );
 
-  const productosFiltrados = productos.filter(
-    (producto) =>
-      producto.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      producto.descripcion.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // Filtrado ultra seguro contra nulos o indefinidos
+  const productosFiltrados = productos.filter((producto) => {
+    const query = busqueda.toLowerCase().trim();
+    if (!query) return true;
+
+    const titulo = (producto.titulo || "").toLowerCase();
+    const descripcion = (producto.descripcion || "").toLowerCase();
+    const genero = (producto.genero_nombre || "").toLowerCase();
+
+    return titulo.includes(query) || descripcion.includes(query) || genero.includes(query);
+  });
 
   return (
     <main className="min-h-screen bg-[#100C18] text-white">
@@ -177,8 +226,8 @@ export default function Home() {
               )}
             </button>
 
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => router.push("/login")}
               className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
             >
@@ -266,78 +315,97 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Muestra estado de carga */}
+        {/* Estado de carga */}
         {loading && (
           <div className="py-20 text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent align-[-0.125em]" />
-            <p className="mt-4 text-gray-400">Cargando catálogo...</p>
+            <p className="mt-4 text-gray-400">Cargando catálogo desde el servidor...</p>
           </div>
         )}
 
-        {/* Muestra mensaje si hubo error */}
+        {/* Mensaje de error */}
         {error && !loading && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
-            <p> Error: {error}</p>
+            <p>Error: {error}</p>
           </div>
         )}
 
-        {/* Lista de productos */}
-        {!loading && !error && productosFiltrados.length === 0 ? (
+        {/* Lista de productos vacía */}
+        {!loading && !error && productosFiltrados.length === 0 && (
           <div className="py-12 text-center">
             <p className="text-lg text-gray-400">
               No se encontraron juegos que coincidan con tu búsqueda.
             </p>
           </div>
-        ) : (
-          !loading && !error && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {productosFiltrados.map((producto) => (
-                <article
-                  key={producto.id}
-                  className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
-                >
-                  <div className="relative h-52 overflow-hidden bg-[#211A2D]">
-                    <img
-                      src={producto.imagen}
-                      alt={producto.nombre}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    {producto.descuento > 0 && (
-                      <div className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
-                        -{producto.descuento}%
-                      </div>
-                    )}
+        )}
+
+        {/* Mapeo de productos */}
+        {!loading && !error && productosFiltrados.length > 0 && (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {productosFiltrados.map((producto) => (
+              <article
+                key={producto.id}
+                className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950"
+              >
+                <div className="relative h-52 overflow-hidden bg-[#211A2D]">
+                  <img
+                    src={producto.portada_url}
+                    alt={producto.titulo}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        "https://via.placeholder.com/400x300?text=Sin+Imagen";
+                    }}
+                  />
+                  <div className="absolute left-3 top-3 rounded-md border border-purple-500/30 bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
+                    {producto.genero_nombre}
+                  </div>
+                </div>
+
+                <div className="p-5">
+                  <div className="mb-1 flex items-center justify-between text-xs font-semibold text-purple-400">
+                    <span>{producto.desarrolladora_nombre}</span>
+                    <span className="capitalize">{producto.edicion}</span>
                   </div>
 
-                  <div className="p-5">
-                    <h3 className="text-lg font-bold group-hover:text-purple-400">
-                      {producto.nombre}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {producto.descripcion}
-                    </p>
+                  <h3 className="text-lg font-bold group-hover:text-purple-400">
+                    {producto.titulo}
+                  </h3>
 
-                    <div className="mt-5 flex items-end justify-between">
-                      <div>
-                        <p className="text-xs text-gray-500">Desde</p>
-                        <span className="text-2xl font-black">
-                          Q{producto.precio.toFixed(2)}
-                        </span>
-                      </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-400">
+                    {producto.descripcion}
+                  </p>
 
-                      <button
-                        type="button"
-                        onClick={() => setJuegoDetalle(producto)}
-                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
-                      >
-                        Comprar
-                      </button>
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-gray-400">
+                    <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
+                      {producto.clasificacion_nombre}
+                    </span>
+                    <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
+                      {producto.numero_jugadores}{" "}
+                      {producto.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 flex items-end justify-between border-t border-purple-900/20 pt-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Lanzamiento</p>
+                      <span className="text-sm font-semibold text-gray-300">
+                        {producto.fecha_lanzamiento}
+                      </span>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setJuegoDetalle(producto)}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
+                    >
+                      Detalles
+                    </button>
                   </div>
-                </article>
-              ))}
-            </div>
-          )
+                </div>
+              </article>
+            ))}
+          </div>
         )}
       </section>
 
@@ -363,32 +431,45 @@ export default function Home() {
 
               <div className="relative h-56 w-full overflow-hidden rounded-xl bg-[#211A2D]">
                 <img
-                  src={juegoDetalle.imagen}
-                  alt={juegoDetalle.nombre}
+                  src={juegoDetalle.portada_url}
+                  alt={juegoDetalle.titulo}
                   className="h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://via.placeholder.com/400x300?text=Sin+Imagen";
+                  }}
                 />
-                {juegoDetalle.descuento > 0 && (
-                  <span className="absolute left-3 top-3 rounded-md bg-green-600 px-2 py-1 text-xs font-black">
-                    -{juegoDetalle.descuento}% OFF
-                  </span>
-                )}
+                <span className="absolute left-3 top-3 rounded-md bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
+                  {juegoDetalle.genero_nombre}
+                </span>
               </div>
 
               <div className="mt-5">
-                <h2 className="text-2xl font-bold">{juegoDetalle.nombre}</h2>
-                <p className="mt-1 text-sm font-medium text-purple-400">
-                  Plataforma: {juegoDetalle.descripcion}
+                <div className="flex items-center justify-between text-xs font-semibold text-purple-400">
+                  <span>{juegoDetalle.desarrolladora_nombre}</span>
+                  <span className="capitalize">{juegoDetalle.edicion}</span>
+                </div>
+                <h2 className="mt-1 text-2xl font-bold">{juegoDetalle.titulo}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-gray-300">
+                  {juegoDetalle.descripcion}
                 </p>
-                <p className="mt-4 text-sm leading-relaxed text-gray-300">
-                  Licencia digital original. Entrega inmediata tras confirmar la compra. Incluye garantía de activación global y soporte técnico 24/7.
-                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-400">
+                  <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-1">
+                    Clasificación: {juegoDetalle.clasificacion_nombre}
+                  </span>
+                  <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-1">
+                    {juegoDetalle.numero_jugadores}{" "}
+                    {juegoDetalle.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
+                  </span>
+                </div>
               </div>
 
               <div className="mt-6 flex items-center justify-between border-t border-purple-900/40 pt-4">
                 <div>
-                  <span className="text-xs text-gray-400">Precio final con descuento:</span>
+                  <span className="text-xs text-gray-400">Precio:</span>
                   <p className="text-2xl font-black text-green-400">
-                    Q{calcularPrecioFinal(juegoDetalle).toFixed(2)}
+                    Q{juegoDetalle.precio > 0 ? juegoDetalle.precio.toFixed(2) : "0.00"}
                   </p>
                 </div>
 
@@ -436,7 +517,7 @@ export default function Home() {
                     className="flex items-center justify-between rounded-lg bg-[#211A2D] p-3"
                   >
                     <div>
-                      <p className="font-semibold">{producto.nombre}</p>
+                      <p className="font-semibold">{producto.titulo}</p>
                       <p className="text-sm text-green-400">
                         Q{calcularPrecioFinal(producto).toFixed(2)}
                       </p>
