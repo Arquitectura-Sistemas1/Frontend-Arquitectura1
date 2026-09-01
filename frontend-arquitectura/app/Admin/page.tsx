@@ -32,7 +32,7 @@ interface Transaccion {
   estado: 'COMPLETADO' | 'PENDIENTE' | 'DEVUELTO';
 }
 
-// 1. NUEVA INTERFAZ DE EMPLEADO
+// Actualizacion de datos de empleados con campos adicionales
 interface Empleado {
   id: number;
   nombres: string;
@@ -73,7 +73,7 @@ export default function AdminDashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // --- 2. ESTADOS ACTUALIZADOS PARA EMPLEADOS ---
+  // ESTADOS ACTUALIZADOS PARA EMPLEADOS 
   const [empleados, setEmpleados] = useState<Empleado[]>([
     {
       id: 1,
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
     cargarDatos();
   }, []);
 
-  // --- 3. CRUD DE EMPLEADOS CON NUEVOS CAMPOS ---
+  // CRUD de empleados 
   const abrirModalCrear = () => {
     setEmpleadoEditando(null);
     setFormData({
@@ -331,7 +331,7 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {/* 1. ESTADÍSTICAS CON GRÁFICOS */}
+            {/*ESTADÍSTICAS CON GRÁFICOS */}
             {activeTab === 'estadisticas' && (
               <div className="space-y-6">
                 <div>
@@ -452,7 +452,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 3. GESTIÓN EMPLEADOS (TABLA CON COLUMNAS ACTUALIZADAS) */}
+            {/* 3. GESTIÓN EMPLEADOS TABLA CON COLUMNAS ACTUALIZADAS */}
             {activeTab === 'empleados' && (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -606,7 +606,7 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      {/* MODAL EMPLEADO ACTUALIZADO CON TODOS LOS CAMPOS */}
+      {/* MODAL EMPLEADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
