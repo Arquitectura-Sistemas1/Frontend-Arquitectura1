@@ -22,6 +22,13 @@ export interface Producto {
   fecha_lanzamiento: string;
 }
 
+export interface Usuario {
+  id?: number;
+  nombre?: string;
+  username?: string;
+  email?: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -34,87 +41,92 @@ export default function Home() {
   const [juegoDetalle, setJuegoDetalle] = useState<Producto | null>(null);
   const [busqueda, setBusqueda] = useState("");
 
+  // Estado del usuario autenticado
+  const [usuarioSesion, setUsuarioSesion] = useState<Usuario | null>(null);
+
   // 1. Cargar productos desde la API
   useEffect(() => {
-  const fetchProductos = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    const fetchProductos = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const response = await fetch(
-        "https://sedation-scribe-state.ngrok-free.dev/inv/videojuegos",
-        {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-            "ngrok-skip-browser-warning": "true",
-          },
+        const response = await fetch(
+          "https://sedation-scribe-state.ngrok-free.dev/inv/videojuegos",
+          {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "ngrok-skip-browser-warning": "true",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: No se pudo obtener el catálogo`);
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: No se pudo obtener el catálogo`);
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : data.data || [];
+
+        const productosFormateados: Producto[] = items.map((item: any, idx: number) => {
+          const tituloVal = item.titulo || "Sin título";
+          const imagenRaw = item.portada_url || "";
+          const imagenVal = (imagenRaw && !imagenRaw.includes("cdn.ejemplo.com"))
+            ? imagenRaw
+            : "https://placehold.co/400x300?text=Sin+Portada";
+
+          return {
+            id: Number(item.id || idx + 1),
+            nombre: String(tituloVal),
+            titulo: String(tituloVal),
+            descripcion: String(item.descripcion || ""),
+            precio: 299.99,
+            descuento: 0,
+            imagen: String(imagenVal),
+            portada_url: String(imagenVal),
+            genero_nombre: String(item.genero_nombre || "General"),
+            desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
+            edicion: String(item.edicion || "Estándar"),
+            clasificacion_nombre: String(item.clasificacion_nombre || "General"),
+            numero_jugadores: Number(item.numero_jugadores || 1),
+            fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
+          };
+        });
+
+        setProductos(productosFormateados);
+      } catch (err: any) {
+        console.error("Error cargando productos:", err);
+        setError(err.message || "Ocurrió un error inesperado al conectar con el servidor");
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const data = await response.json();
-      console.log("Respuesta API Ngrok:", data);
+    fetchProductos();
+  }, []);
 
-      const items = Array.isArray(data) ? data : data.data || [];
-
-      const productosFormateados: Producto[] = items.map((item: any, idx: number) => {
-        const tituloVal = item.titulo || "Sin título";
-        
-        // Reemplazamos portadas dummy que traigan "cdn.ejemplo.com" por un placeholder funcional
-        const imagenRaw = item.portada_url || "";
-        const imagenVal = (imagenRaw && !imagenRaw.includes("cdn.ejemplo.com"))
-          ? imagenRaw
-          : "https://placehold.co/400x300?text=Sin+Portada";
-
-        return {
-          id: Number(item.id || idx + 1),
-          nombre: String(tituloVal),
-          titulo: String(tituloVal),
-          descripcion: String(item.descripcion || ""),
-          
-          // Precio fijo temporal mientras FastAPI envía el campo real
-          precio: 299.99,
-          descuento: 0,
-
-          imagen: String(imagenVal),
-          portada_url: String(imagenVal),
-          
-          // Mapeo directo contra los atributos de FastAPI
-          genero_nombre: String(item.genero_nombre || "General"),
-          desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
-          edicion: String(item.edicion || "Estándar"),
-          clasificacion_nombre: String(item.clasificacion_nombre || "General"),
-          numero_jugadores: Number(item.numero_jugadores || 1),
-          fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
-          idioma: String(item.idioma || "N/A"),
-        };
-      });
-
-      setProductos(productosFormateados);
-    } catch (err: any) {
-      console.error("Error cargando productos:", err);
-      setError(err.message || "Ocurrió un error inesperado al conectar con el servidor");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchProductos();
-}, []);
-
-  // 2. Cargar datos del carrito desde localStorage
+  // 2. Cargar datos del carrito y usuario desde localStorage
   useEffect(() => {
     setMounted(true);
-    const dataGuardada = localStorage.getItem("carrito_nexus");
-    if (dataGuardada) {
+    
+    // Cargar Carrito
+    const dataCarrito = localStorage.getItem("carrito_nexus");
+    if (dataCarrito) {
       try {
-        setCarrito(JSON.parse(dataGuardada));
+        setCarrito(JSON.parse(dataCarrito));
       } catch (e) {
         console.error("Error al parsear el carrito", e);
+      }
+    }
+
+    // Cargar Usuario
+    const dataUsuario = localStorage.getItem("usuario_nexus");
+    if (dataUsuario) {
+      try {
+        setUsuarioSesion(JSON.parse(dataUsuario));
+      } catch (e) {
+        console.error("Error al parsear usuario de sesión", e);
       }
     }
   }, []);
@@ -125,6 +137,12 @@ export default function Home() {
       localStorage.setItem("carrito_nexus", JSON.stringify(carrito));
     }
   }, [carrito, mounted]);
+
+  const cerrarSesion = () => {
+    localStorage.removeItem("usuario_nexus");
+    localStorage.removeItem("token_nexus");
+    setUsuarioSesion(null);
+  };
 
   function agregarAlCarrito(producto: Producto) {
     setCarrito((prev) => [...prev, producto]);
@@ -143,7 +161,6 @@ export default function Home() {
     0
   );
 
-  // Filtrado ultra seguro contra nulos o indefinidos
   const productosFiltrados = productos.filter((producto) => {
     const query = busqueda.toLowerCase().trim();
     if (!query) return true;
@@ -159,22 +176,21 @@ export default function Home() {
     <main className="min-h-screen bg-[#100C18] text-white">
       {/* ================= NAVBAR ================= */}
       <header className="sticky top-0 z-40 border-b border-purple-900/30 bg-[#100C18]/95 backdrop-blur">
-  <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-    <div className="flex items-center gap-3">
-      <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl">
-        <Image
-          src="/logo.png" 
-          alt="Nexus Gaming Logo"
-          width={100}
-          height={100}
-          className="object-contain p-1"
-        />
-      </div>
-
-      <span className="text-2xl font-bold tracking-tight">
-        NEXUS<span className="text-green-500">GAMES</span>
-      </span>
-    </div>
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push("/")}>
+            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl">
+              <Image
+                src="/logo.png" 
+                alt="Nexus Gaming Logo"
+                width={48}
+                height={48}
+                className="object-contain p-1"
+              />
+            </div>
+            <span className="text-2xl font-bold tracking-tight">
+              NEXUS<span className="text-green-500">GAMES</span>
+            </span>
+          </div>
 
           <div className="hidden w-[400px] md:block">
             <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 focus-within:border-purple-500">
@@ -226,13 +242,30 @@ export default function Home() {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push("/login")}
-              className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
-            >
-              Iniciar sesión
-            </button>
+            {/* SECCIÓN DINÁMICA DE AUTENTICACIÓN */}
+            {mounted && usuarioSesion ? (
+              <div className="flex items-center gap-3 bg-[#211A2D] border border-purple-900/50 px-3 py-1.5 rounded-xl">
+                <span className="text-xs text-purple-300 font-semibold">
+                  👤 {usuarioSesion.nombre || usuarioSesion.username}
+                </span>
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  title="Cerrar sesión"
+                  className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/40 px-2 py-1 rounded-lg transition"
+                >
+                  Salir
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
+              >
+                Iniciar sesión
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -240,7 +273,7 @@ export default function Home() {
       {/* ================= HERO ================= */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-950 via-[#100C18] to-green-950 opacity-60" />
-        <div className="relative mx-auto max-w-7xl px-6 py-24">
+        <div className="relative mx-auto max-w-7xl px-6 py-24 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="max-w-2xl">
             <div className="mb-5 inline-flex rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-semibold text-green-400">
               🔥 OFERTAS ESPECIALES
@@ -260,16 +293,14 @@ export default function Home() {
               Ver ofertas
             </a>
           </div>
-          {/*Imagen Mascota */}
-      <div className="flex justify-center md:justify-end">
-        <div className="relative -mt-500 h-[370px] w-full max-w-[480px] sm:h-[500px] lg:-mt-120">
-          <img
-            src="/chispudo.png"
-            alt="Mascota Nexus Games"
-            className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(168,85,247,0.3)]"
-          />
-        </div>
-      </div>
+
+          <div className="relative h-[300px] w-full max-w-[400px] sm:h-[400px]">
+            <img
+              src="/chispudo.png"
+              alt="Mascota Nexus Games"
+              className="h-full w-full object-contain drop-shadow-[0_10px_25px_rgba(168,85,247,0.3)]"
+            />
+          </div>
         </div>
       </section>
 
@@ -315,7 +346,6 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Estado de carga */}
         {loading && (
           <div className="py-20 text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent align-[-0.125em]" />
@@ -323,14 +353,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Mensaje de error */}
         {error && !loading && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
             <p>Error: {error}</p>
           </div>
         )}
 
-        {/* Lista de productos vacía */}
         {!loading && !error && productosFiltrados.length === 0 && (
           <div className="py-12 text-center">
             <p className="text-lg text-gray-400">
@@ -339,7 +367,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Mapeo de productos */}
         {!loading && !error && productosFiltrados.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {productosFiltrados.map((producto) => (

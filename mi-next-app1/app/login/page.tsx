@@ -8,48 +8,57 @@ import Image from "next/image";
 export default function LoginPage() {
   const router = useRouter();
 
-  
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
 
-  
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError(null);
-  setCargando(true);
+    e.preventDefault();
+    setError(null);
+    setCargando(true);
 
-  try {
-    const res = await fetch("https://sedation-scribe-state.ngrok-free.dev/auth/login", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        // Si te da error de pantalla de advertencia de ngrok al hacer fetch,
-        // puedes descomentar la siguiente línea:
-        // "ngrok-skip-browser-warning": "69420"
-      },
-      body: JSON.stringify({ 
-        usuario: usuario, 
-        psswd: password // Mapeado exacto a la key 'psswd' que requiere el backend
-      }),
-    });
+    try {
+      const res = await fetch("https://sedation-scribe-state.ngrok-free.dev/auth/login", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
+        },
+        body: JSON.stringify({ 
+          usuario: usuario, 
+          psswd: password
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || "Usuario o contraseña incorrectos.");
+      }
 
-    if (!res.ok) {
-      throw new Error(data.message || "Usuario o contraseña incorrectos.");
+      // Estructura normalizada de datos de usuario
+      const datosUsuario = {
+        id: data.id || data.usuario?.id,
+        nombre: data.nombre || data.usuario?.nombre || usuario,
+        username: data.username || data.usuario?.username || usuario,
+        email: data.email || data.usuario?.email
+      };
+
+      localStorage.setItem("usuario_nexus", JSON.stringify(datosUsuario));
+      if (data.token) {
+        localStorage.setItem("token_nexus", data.token);
+      }
+
+      router.push("/");
+    } catch (err: any) {
+      console.error("Error al iniciar sesión:", err);
+      setError(err.message || "No se pudo conectar con el servidor.");
+    } finally {
+      setCargando(false);
     }
-
-    router.push("/");
-  } catch (err: any) {
-    console.error("Error al iniciar sesión:", err);
-    setError(err.message || "No se pudo conectar con el servidor.");
-  } finally {
-    setCargando(false);
-  }
-};
+  };
 
   return (
     <main className="min-h-screen bg-[#100C18] text-white flex items-center justify-center p-6 relative">
@@ -63,18 +72,16 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md rounded-2xl border border-purple-900/40 bg-[#181323] p-8 shadow-2xl">
         <div className="text-center">
-          <center>
-         <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl">
-                 <Image
-                   src="/logo.png" 
-                   alt="Nexus Gaming Logo"
-                   width={1500}
-                   height={150}
-                   className="object-contain p-1"
-                 />
-               </div>
-          </center>
-          <h1 className="text-2xl font-bold">
+          <div className="relative flex h-32 w-32 mx-auto items-center justify-center overflow-hidden rounded-xl">
+            <Image
+              src="/logo.png" 
+              alt="Nexus Gaming Logo"
+              width={150}
+              height={150}
+              className="object-contain p-1"
+            />
+          </div>
+          <h1 className="text-2xl font-bold mt-2">
             NEXUS<span className="text-green-500">GAMES</span>
           </h1>
           <p className="mt-2 text-sm text-gray-400">
@@ -82,7 +89,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* NOTIFICACIÓN DE ERROR */}
         {error && (
           <div className="mt-6 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-center text-xs font-semibold text-red-400">
             ⚠️ {error}
