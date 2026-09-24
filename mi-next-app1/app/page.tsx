@@ -230,6 +230,14 @@ export default function Home() {
             </button>
 
             <button
+              type="button"
+              onClick={() => router.push("/soporte")}
+              className="hidden text-sm text-gray-300 hover:text-white md:block"
+              >
+              Soporte
+            </button>
+
+            <button
               onClick={() => setMostrarCarrito(!mostrarCarrito)}
               className="relative text-2xl"
               type="button"
