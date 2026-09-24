@@ -7,9 +7,7 @@ on:
     branches: [ "develop", "main", "Develop" ]
 
 jobs:
-  
-  # 1.  ESTO ES DEEEEL INTEGRACIÓN CONTINUA (CI)
-  
+  # INTEGRACIÓN CONTINUA (CI)
   build-and-validate:
     runs-on: ubuntu-latest
 
@@ -26,9 +24,7 @@ jobs:
       - name: Validar compilacion de Dockerfile Frontend
         run: docker build -t frontend-app-test .
 
- 
-  # 2. ESTO ES DE DESPLIEGUE CONTINUO - DESARROLLO (Ubuntu Server / Tailscale)
-  
+  # DESPLIEGUE CONTINUO: DESARROLLO (Ubuntu Server / Tailscale)
   deploy-dev:
     name: Despliegue a Entorno de Desarrollo
     needs: build-and-validate
@@ -40,49 +36,39 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Conectar a la VPN de Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Desplegar Frontend en Ubuntu Server vía SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.DEV_SERVER_HOST }}
-          username: ${{ secrets.DEV_SERVER_USER }}
-          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          script: |
-            cd /ruta/de/tu/proyecto/frontend
+      - name: Desplegar en Ubuntu Server vía SSH sobre Tailscale
+        env:
+        
+          SSH_KEY: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          DEV_HOST: ${{ secrets.DEV_SERVER_HOST }}
+          DEV_USER: ${{ secrets.DEV_SERVER_USER }}
+        run: |
+          # 1. Configurar la llave SSH de forma segura en el runner
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          
+          # 2. Configurar SSH con el túnel de Tailscale
+          cat <<EOF > ~/.ssh/config
+          Host dev-server
+              HostName $DEV_HOST
+              User $DEV_USER
+              IdentityFile ~/.ssh/id_ed25519
+              StrictHostKeyChecking no
+              ProxyCommand tailscale nc %h %p
+          EOF
+
+          # 3. Ejecutar actualización del servidor y despliegue del contenedor
+          ssh dev-server << 'EOF'
+            cd /home/Brxckin/Frontend-Arquitectura1
             git pull origin Develop
             docker build -t frontend-dev .
-            docker stop frontend-dev-container || true
-            docker rm frontend-dev-container || true
-            docker run -d --name frontend-dev-container -p 3000:3000 frontend-dev
-
-  
-  # 3. estooo es de DESPLIEGUE CONTINUO - PRODUCCIÓN (Oracle Cloud)
-  
-  deploy-prod:
-    name: Despliegue a Producción (OCI)
-    needs: build-and-validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Descargar código
-        uses: actions/checkout@v4
-
-      - name: Desplegar Frontend en Oracle Cloud vía SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_SERVER_HOST }}
-          username: ${{ secrets.PROD_SERVER_USER }}
-          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
-          script: |
-            cd /ruta/de/tu/proyecto/frontend
-            git pull origin main
-            docker build -t frontend-prod .
-            docker stop frontend-prod-container || true
-            docker rm frontend-prod-container || true
-            docker run -d --name frontend-prod-container -p 80:3000 frontend-prod
+            docker container inspect frontend-dev-container >/dev/null 2>&1 && docker stop frontend-dev-container && docker rm frontend-dev-container || true
+            docker run -d --name frontend-dev-container --env-file .env -p 3000:3000 frontend-dev
+          EOF
