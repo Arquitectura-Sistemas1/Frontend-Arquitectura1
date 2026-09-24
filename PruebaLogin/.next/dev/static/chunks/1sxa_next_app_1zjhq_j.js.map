@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 3, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/javib/OneDrive/Escritorio/Universidad/Semestre%206/Arquitectura%20de%20Sistemas%20I/Proyecto_Area_Frontend/Frontend-Arquitectura1/PruebaLogin/node_modules/next/app.js"],"sourcesContent":["module.exports = require('./dist/pages/_app')\n"],"names":["module","exports"],"mappings":"AAAAA,OAAOC,OAAO","ignoreList":[0]}}]
+}
