@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface ProductoCarrito {
+  id: number;
+  titulo: string;
+  precio: number;
+  descuento: number;
+}
+
 interface MetodoPago {
   ID: number;
   Nombre: string;
@@ -37,6 +44,9 @@ export default function CheckoutPage() {
   const [exito, setExito] = useState(false);
   const [datosFactura, setDatosFactura] = useState<FacturaRespuesta | null>(null);
 
+  // Lista de items en el carrito para mostrar el resumen correcto
+  const [itemsCarrito, setItemsCarrito] = useState<ProductoCarrito[]>([]);
+
   // Lista dinámica de métodos de pago
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
   const [cargandoMetodos, setCargandoMetodos] = useState(true);
@@ -54,6 +64,18 @@ export default function CheckoutPage() {
   const [expiracion, setExpiracion] = useState("");
   const [cvv, setCvv] = useState("");
   const [direccion, setDireccion] = useState("");
+
+  // Cargar carrito desde localStorage
+  useEffect(() => {
+    const carritoGuardado = localStorage.getItem("carrito_nexus");
+    if (carritoGuardado) {
+      try {
+        setItemsCarrito(JSON.parse(carritoGuardado));
+      } catch (e) {
+        console.error("Error al leer el carrito:", e);
+      }
+    }
+  }, []);
 
   // Cargar lista de métodos de pago desde la API
   useEffect(() => {
@@ -99,6 +121,23 @@ export default function CheckoutPage() {
   }, []);
 
   const metodoSeleccionado = metodosPago.find((m) => m.ID === metodoPagoId);
+
+  // Cálculo estricto del precio por ítem aplicando descuento si es mayor a 0
+  const calcularPrecioItem = (item: ProductoCarrito) => {
+    const precioBase = Number(item.precio || 0);
+    const descuento = Number(item.descuento || 0);
+    if (descuento > 0 && descuento <= 100) {
+      return precioBase * (1 - descuento / 100);
+    }
+    return precioBase;
+  };
+
+  const subtotalCarrito = itemsCarrito.reduce(
+    (suma, item) => suma + calcularPrecioItem(item),
+    0
+  );
+
+  const totalFinal = cuponInfo?.Total !== undefined ? cuponInfo.Total : subtotalCarrito;
 
   // Función para aplicar cupón
   const aplicarCupon = async () => {
@@ -226,7 +265,37 @@ export default function CheckoutPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-2">Finalizar Compra</h1>
-        <p className="text-sm text-gray-400 mb-6">Ingresa los detalles de tu método de pago</p>
+        <p className="text-sm text-gray-400 mb-6">Revisa tu resumen e ingresa tu método de pago</p>
+
+        {/* Resumen Rápido del Pedido en Checkout */}
+        <div className="mb-6 rounded-xl border border-purple-900/40 bg-[#211A2D]/40 p-4 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-2">Resumen del Pedido</p>
+          <div className="max-h-36 overflow-y-auto space-y-2 text-xs text-gray-300">
+            {itemsCarrito.map((item, idx) => {
+              const precioFinalItem = calcularPrecioItem(item);
+              const tieneDescuento = Number(item.descuento || 0) > 0;
+
+              return (
+                <div key={idx} className="flex justify-between items-center border-b border-purple-900/20 pb-1">
+                  <span className="truncate pr-2">{item.titulo}</span>
+                  <div className="text-right whitespace-nowrap">
+                    <span className="text-green-400 font-semibold">Q{precioFinalItem.toFixed(2)}</span>
+                    {tieneDescuento && (
+                      <span className="block text-[10px] text-gray-500 line-through">
+                        Q{Number(item.precio).toFixed(2)} (-{item.descuento}%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-2 border-t border-purple-900/40 flex justify-between text-sm font-bold">
+            <span>Total a Pagar:</span>
+            <span className="text-green-400 text-base">Q{totalFinal.toFixed(2)}</span>
+          </div>
+        </div>
 
         {exito && (
           <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-5 text-center text-sm text-green-400 space-y-3">

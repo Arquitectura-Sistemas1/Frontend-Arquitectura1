@@ -11,7 +11,7 @@ export interface Producto {
   titulo: string;
   descripcion: string;
   precio: number;
-  descuento: number;
+  descuento: number; // Porcentaje o valor de descuento devuelto por la API
   imagen: string;
   portada_url: string;
   genero_nombre: string;
@@ -85,7 +85,7 @@ export default function Home() {
                 ? imagenRaw
                 : "https://placehold.co/400x300?text=Sin+Portada";
 
-            // Tomamos el precio y descuento directamente de la API sin alterarlos
+            // Tomamos el precio y descuento directamente de la API
             const precioParsed = parseFloat(item.precio_venta ?? item.precio);
             const precioFinal = !isNaN(precioParsed) ? precioParsed : 0;
 
@@ -469,78 +469,101 @@ export default function Home() {
         {/* Mapeo de productos */}
         {!loading && !error && productosFiltrados.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {productosFiltrados.map((producto) => (
-              <article
-                key={producto.id}
-                className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="relative h-52 overflow-hidden bg-[#211A2D]">
-                    <img
-                      src={producto.portada_url}
-                      alt={producto.titulo}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          "https://placehold.co/400x300?text=Sin+Imagen";
-                      }}
-                    />
-                    <div className="absolute left-3 top-3 flex gap-2">
-                      <span className="rounded-md border border-purple-500/30 bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
-                        {producto.genero_nombre}
-                      </span>
-                      <span className="rounded-md border border-green-500/30 bg-green-900/80 px-2.5 py-1 text-xs font-bold text-green-200 backdrop-blur-md">
-                        {producto.plataforma_nombre}
-                      </span>
+            {productosFiltrados.map((producto) => {
+              // Verificamos si tiene descuento aplicado según la API
+              const tieneDescuento = producto.descuento > 0;
+              const precioOriginal = producto.precio;
+              const precioConDescuento = tieneDescuento
+                ? precioOriginal * (1 - producto.descuento / 100)
+                : precioOriginal;
+
+              return (
+                <article
+                  key={producto.id}
+                  className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="relative h-52 overflow-hidden bg-[#211A2D]">
+                      <img
+                        src={producto.portada_url}
+                        alt={producto.titulo}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://placehold.co/400x300?text=Sin+Imagen";
+                        }}
+                      />
+                      <div className="absolute left-3 top-3 flex gap-2">
+                        <span className="rounded-md border border-purple-500/30 bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
+                          {producto.genero_nombre}
+                        </span>
+                        <span className="rounded-md border border-green-500/30 bg-green-900/80 px-2.5 py-1 text-xs font-bold text-green-200 backdrop-blur-md">
+                          {producto.plataforma_nombre}
+                        </span>
+                      </div>
+
+                      {/* Etiqueta flotante de descuento si existe */}
+                      {tieneDescuento && (
+                        <div className="absolute right-3 top-3 rounded-md bg-red-600 px-2.5 py-1 text-xs font-black text-white shadow-lg">
+                          -{producto.descuento}%
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-5">
+                      <div className="mb-1 flex items-center justify-between text-xs font-semibold text-purple-400">
+                        <span>{producto.desarrolladora_nombre}</span>
+                        <span className="capitalize">{producto.edicion}</span>
+                      </div>
+
+                      <h3 className="text-lg font-bold group-hover:text-purple-400">
+                        {producto.titulo}
+                      </h3>
+
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-400">
+                        {producto.descripcion}
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-gray-400">
+                        <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
+                          {producto.clasificacion_nombre}
+                        </span>
+                        <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
+                          {producto.numero_jugadores}{" "}
+                          {producto.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-5">
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-purple-400">
-                      <span>{producto.desarrolladora_nombre}</span>
-                      <span className="capitalize">{producto.edicion}</span>
-                    </div>
+                  <div className="p-5 pt-0">
+                    <div className="flex items-end justify-between border-t border-purple-900/20 pt-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Precio</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-black text-green-400">
+                            Q{precioConDescuento.toFixed(2)}
+                          </span>
+                          {tieneDescuento && (
+                            <span className="text-xs text-gray-500 line-through">
+                              Q{precioOriginal.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                    <h3 className="text-lg font-bold group-hover:text-purple-400">
-                      {producto.titulo}
-                    </h3>
-
-                    <p className="mt-1 line-clamp-2 text-sm text-gray-400">
-                      {producto.descripcion}
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-gray-400">
-                      <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
-                        {producto.clasificacion_nombre}
-                      </span>
-                      <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
-                        {producto.numero_jugadores}{" "}
-                        {producto.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setJuegoDetalle(producto)}
+                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
+                      >
+                        Detalles
+                      </button>
                     </div>
                   </div>
-                </div>
-
-                <div className="p-5 pt-0">
-                  <div className="flex items-end justify-between border-t border-purple-900/20 pt-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Precio</p>
-                      <span className="text-lg font-black text-green-400">
-                        Q{producto.precio.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setJuegoDetalle(producto)}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
-                    >
-                      Detalles
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
@@ -583,6 +606,11 @@ export default function Home() {
                     {juegoDetalle.plataforma_nombre}
                   </span>
                 </div>
+                {juegoDetalle.descuento > 0 && (
+                  <div className="absolute right-3 top-3 rounded-md bg-red-600 px-3 py-1 text-sm font-black text-white shadow-lg">
+                    -{juegoDetalle.descuento}%
+                  </div>
+                )}
               </div>
 
               <div className="mt-5">
@@ -612,9 +640,19 @@ export default function Home() {
               <div className="mt-6 flex items-center justify-between border-t border-purple-900/40 pt-4">
                 <div>
                   <span className="text-xs text-gray-400">Precio:</span>
-                  <p className="text-2xl font-black text-green-400">
-                    Q{juegoDetalle.precio.toFixed(2)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-black text-green-400">
+                      Q{(juegoDetalle.descuento > 0
+                        ? juegoDetalle.precio * (1 - juegoDetalle.descuento / 100)
+                        : juegoDetalle.precio
+                      ).toFixed(2)}
+                    </p>
+                    {juegoDetalle.descuento > 0 && (
+                      <span className="text-sm text-gray-500 line-through">
+                        Q{juegoDetalle.precio.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <button
@@ -655,26 +693,32 @@ export default function Home() {
           ) : (
             <div>
               <div className="max-h-80 space-y-3 overflow-y-auto">
-                {carrito.map((producto, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-lg bg-[#211A2D] p-3"
-                  >
-                    <div>
-                      <p className="font-semibold">{producto.titulo}</p>
-                      <p className="text-sm text-green-400">
-                        Q{producto.precio.toFixed(2)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => eliminarDelCarrito(index)}
-                      className="rounded-lg px-2 py-1 text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+                {carrito.map((producto, index) => {
+                  const precioItem = producto.descuento > 0
+                    ? producto.precio * (1 - producto.descuento / 100)
+                    : producto.precio;
+
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between rounded-lg bg-[#211A2D] p-3"
                     >
-                      🗑️
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <p className="font-semibold">{producto.titulo}</p>
+                        <p className="text-sm text-green-400">
+                          Q{precioItem.toFixed(2)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => eliminarDelCarrito(index)}
+                        className="rounded-lg px-2 py-1 text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="mt-5 border-t border-purple-900/50 pt-5">
