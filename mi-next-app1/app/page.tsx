@@ -39,6 +39,9 @@ export default function Home() {
   const [busqueda, setBusqueda] = useState("");
   const [procesandoCompra, setProcesandoCompra] = useState(false);
 
+  // Estado para el usuario autenticado
+  const [usuarioActual, setUsuarioActual] = useState<any>(null);
+
   // 1. Cargar productos de la API
   useEffect(() => {
     const fetchProductos = async () => {
@@ -82,13 +85,12 @@ export default function Home() {
                 ? imagenRaw
                 : "https://placehold.co/400x300?text=Sin+Portada";
 
-            const precioParsed = parseFloat(item.precio_venta);
-            const precioFinal =
-              !isNaN(precioParsed) && precioParsed > 0 ? precioParsed : 299.99;
+            // Tomamos el precio y descuento directamente de la API sin alterarlos
+            const precioParsed = parseFloat(item.precio_venta ?? item.precio);
+            const precioFinal = !isNaN(precioParsed) ? precioParsed : 0;
 
-            const descuentoParsed = parseFloat(item.descuento_valor);
-            const descuentoFinal =
-              !isNaN(descuentoParsed) && descuentoParsed > 0 ? descuentoParsed : 0;
+            const descuentoParsed = parseFloat(item.descuento_valor ?? item.descuento);
+            const descuentoFinal = !isNaN(descuentoParsed) ? descuentoParsed : 0;
 
             mapaJuegos.set(claveUnica, {
               id: idJuego,
@@ -130,7 +132,7 @@ export default function Home() {
     fetchProductos();
   }, []);
 
-  // 2. Cargar datos del carrito desde localStorage
+  // 2. Cargar datos del carrito y del usuario desde localStorage
   useEffect(() => {
     setMounted(true);
     const dataGuardada = localStorage.getItem("carrito_nexus");
@@ -139,6 +141,15 @@ export default function Home() {
         setCarrito(JSON.parse(dataGuardada));
       } catch (e) {
         console.error("Error al parsear el carrito", e);
+      }
+    }
+
+    const usuarioGuardado = localStorage.getItem("usuario_nexus");
+    if (usuarioGuardado) {
+      try {
+        setUsuarioActual(JSON.parse(usuarioGuardado));
+      } catch (e) {
+        console.error("Error al parsear el usuario", e);
       }
     }
   }, []);
@@ -150,6 +161,29 @@ export default function Home() {
     }
   }, [carrito, mounted]);
 
+  // Función para cerrar sesión consumiendo el endpoint oficial de la API
+  const cerrarSesion = async () => {
+    try {
+      const token = localStorage.getItem("token_nexus");
+      await fetch(`${NGROK_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Accept": "application/json",
+          "ngrok-skip-browser-warning": "69420",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } catch (err) {
+      console.error("Error al notificar cierre de sesión al servidor:", err);
+    } finally {
+      localStorage.removeItem("usuario_nexus");
+      localStorage.removeItem("token_nexus");
+      setUsuarioActual(null);
+      router.push("/login");
+    }
+  };
+
   function agregarAlCarrito(producto: Producto) {
     setCarrito((prev) => [...prev, producto]);
   }
@@ -158,12 +192,9 @@ export default function Home() {
     setCarrito((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function calcularPrecioFinal(producto: Producto) {
-    return producto.precio * (1 - producto.descuento / 100);
-  }
-
+  // Suma directa de los precios mandados por la API
   const total = carrito.reduce(
-    (suma, producto) => suma + calcularPrecioFinal(producto),
+    (suma, producto) => suma + producto.precio,
     0
   );
 
@@ -184,7 +215,6 @@ export default function Home() {
     );
   });
 
-  // Función para procesar el flujo de la orden en el backend antes de ir al checkout
   const manejarContinuarCompra = async () => {
     if (carrito.length === 0) return;
 
@@ -198,7 +228,6 @@ export default function Home() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // 1. Crear el pedido inicial en estado PENDIENTE_PAGO
       const resPedido = await fetch(`${NGROK_BASE_URL}/comercial/crear-pedido`, {
         method: "POST",
         credentials: "include",
@@ -210,7 +239,6 @@ export default function Home() {
         throw new Error("No se pudo iniciar la orden en el servidor. Asegúrate de haber iniciado sesión.");
       }
 
-      // 2. Agregar cada producto del carrito como item del pedido
       for (const item of carrito) {
         await fetch(`${NGROK_BASE_URL}/comercial/agregar-item-pedido`, {
           method: "POST",
@@ -223,7 +251,6 @@ export default function Home() {
         });
       }
 
-      // 3. Todo OK, cerrar carrito y redirigir al checkout
       setMostrarCarrito(false);
       router.push("/checkout");
 
@@ -278,7 +305,7 @@ export default function Home() {
             </div>
           </div>
 
-          <nav className="flex items-center gap-5">
+          <nav className="flex items-center gap-4">
             <a href="#productos" className="hidden text-sm text-gray-300 hover:text-white md:block">
               Ofertas
             </a>
@@ -294,14 +321,6 @@ export default function Home() {
             </button>
 
             <button
-              type="button"
-              onClick={() => router.push("/soporte")}
-              className="hidden text-sm text-gray-300 hover:text-white md:block"
-              >
-              Soporte
-            </button>
-
-            <button
               onClick={() => setMostrarCarrito(!mostrarCarrito)}
               className="relative text-2xl"
               type="button"
@@ -314,13 +333,33 @@ export default function Home() {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push("/login")}
-              className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
-            >
-              Iniciar sesión
-            </button>
+            {/* Renderizado condicional del usuario y sesión */}
+            {mounted && usuarioActual ? (
+              <div className="flex items-center gap-3 pl-2 border-l border-purple-900/40">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs text-gray-400">Bienvenido,</p>
+                  <p className="text-sm font-bold text-purple-300">
+                    {usuarioActual.nombre || usuarioActual.username || "Usuario"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition"
+                  title="Cerrar sesión"
+                >
+                  Salir
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
+              >
+                Iniciar sesión
+              </button>
+            )}
           </nav>
         </div>
       </header>
@@ -487,7 +526,7 @@ export default function Home() {
                     <div>
                       <p className="text-xs text-gray-500">Precio</p>
                       <span className="text-lg font-black text-green-400">
-                        Q{calcularPrecioFinal(producto).toFixed(2)}
+                        Q{producto.precio.toFixed(2)}
                       </span>
                     </div>
 
@@ -574,7 +613,7 @@ export default function Home() {
                 <div>
                   <span className="text-xs text-gray-400">Precio:</span>
                   <p className="text-2xl font-black text-green-400">
-                    Q{calcularPrecioFinal(juegoDetalle).toFixed(2)}
+                    Q{juegoDetalle.precio.toFixed(2)}
                   </p>
                 </div>
 
@@ -624,7 +663,7 @@ export default function Home() {
                     <div>
                       <p className="font-semibold">{producto.titulo}</p>
                       <p className="text-sm text-green-400">
-                        Q{calcularPrecioFinal(producto).toFixed(2)}
+                        Q{producto.precio.toFixed(2)}
                       </p>
                     </div>
                     <button

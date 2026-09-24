@@ -18,6 +18,15 @@ interface FacturaRespuesta {
   MontoTotal?: string | number;
 }
 
+interface CuponRespuesta {
+  status?: string;
+  mensaje?: string;
+  PedidoID?: number;
+  Subtotal?: number;
+  DescuentoTotal?: number;
+  Total?: number;
+}
+
 const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
 
 export default function CheckoutPage() {
@@ -31,6 +40,12 @@ export default function CheckoutPage() {
   // Lista dinámica de métodos de pago
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
   const [cargandoMetodos, setCargandoMetodos] = useState(true);
+
+  // Estados para Cupones
+  const [codigoCupon, setCodigoCupon] = useState("");
+  const [cargandoCupon, setCargandoCupon] = useState(false);
+  const [cuponInfo, setCuponInfo] = useState<CuponRespuesta | null>(null);
+  const [cuponMensaje, setCuponMensaje] = useState<string | null>(null);
 
   // Datos del formulario de pago
   const [nombreCliente, setNombreCliente] = useState("");
@@ -84,6 +99,45 @@ export default function CheckoutPage() {
   }, []);
 
   const metodoSeleccionado = metodosPago.find((m) => m.ID === metodoPagoId);
+
+  // Función para aplicar cupón
+  const aplicarCupon = async () => {
+    if (!codigoCupon.trim()) return;
+    setCargandoCupon(true);
+    setCuponMensaje(null);
+
+    try {
+      const token = localStorage.getItem("token_nexus");
+      const headersComunes = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "ngrok-skip-browser-warning": "69420",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const res = await fetch(`${NGROK_BASE_URL}/comercial/aplicar-cupon`, {
+        method: "POST",
+        credentials: "include",
+        headers: headersComunes,
+        body: JSON.stringify({ Codigo: codigoCupon.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Cupón no válido o expirado.");
+      }
+
+      setCuponInfo(data);
+      setCuponMensaje(data.mensaje || "¡Cupón aplicado con éxito!");
+    } catch (err: any) {
+      console.error("Error al aplicar cupón:", err);
+      setCuponMensaje(err.message || "Error al aplicar el cupón.");
+      setCuponInfo(null);
+    } finally {
+      setCargandoCupon(false);
+    }
+  };
 
   const manejarPago = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,14 +197,10 @@ export default function CheckoutPage() {
         throw new Error(detalle);
       }
 
-      // Guardamos la información detallada de la factura devuelta por FastAPI
       setDatosFactura(responseData);
-
-      // Éxito: Limpiar almacenamiento local y activar estado de éxito
       localStorage.removeItem("carrito_nexus");
       setExito(true);
 
-      // Damos más tiempo (6 segundos) para que el usuario pueda interactuar o ver su factura antes de salir
       setTimeout(() => {
         router.push("/biblioteca");
       }, 6000);
@@ -223,6 +273,43 @@ export default function CheckoutPage() {
         )}
 
         <form onSubmit={manejarPago} className="space-y-4">
+          {/* SECCIÓN DE CUPÓN */}
+          <div className="rounded-xl border border-purple-900/40 bg-[#211A2D]/60 p-4 space-y-2">
+            <label className="block text-xs font-semibold uppercase text-gray-300">
+              ¿Tienes un código de descuento?
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={codigoCupon}
+                onChange={(e) => setCodigoCupon(e.target.value)}
+                placeholder="Ej. NEXUS2026"
+                className="w-full rounded-lg border border-purple-900/50 bg-[#181323] px-3 py-2 text-sm text-white outline-none focus:border-purple-500 transition uppercase"
+              />
+              <button
+                type="button"
+                onClick={aplicarCupon}
+                disabled={cargandoCupon || !codigoCupon.trim()}
+                className="rounded-lg bg-purple-700 px-4 py-2 text-xs font-bold text-white hover:bg-purple-600 transition disabled:opacity-50 whitespace-nowrap"
+              >
+                {cargandoCupon ? "Aplicando..." : "Aplicar Cupón"}
+              </button>
+            </div>
+
+            {cuponMensaje && (
+              <p className={`text-xs ${cuponInfo?.status === "error" || !cuponInfo ? "text-red-400" : "text-green-400"}`}>
+                {cuponMensaje}
+              </p>
+            )}
+
+            {cuponInfo && cuponInfo.Total !== undefined && (
+              <div className="pt-2 border-t border-purple-900/30 text-xs flex justify-between text-gray-300">
+                <span>Descuento aplicado: <strong className="text-green-400">Q{Number(cuponInfo.DescuentoTotal || 0).toFixed(2)}</strong></span>
+                <span>Nuevo Total: <strong className="text-green-400 font-bold">Q{Number(cuponInfo.Total || 0).toFixed(2)}</strong></span>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
               Nombre del Titular / Cliente
