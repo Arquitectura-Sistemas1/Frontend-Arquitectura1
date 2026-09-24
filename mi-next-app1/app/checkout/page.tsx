@@ -3,306 +3,491 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Producto } from "../page";
+
+interface ProductoCarrito {
+  id: number;
+  titulo: string;
+  precio: number;
+  descuento: number;
+}
+
+interface MetodoPago {
+  ID: number;
+  Nombre: string;
+  Instrucciones: string;
+}
+
+interface FacturaRespuesta {
+  TransaccionID?: number;
+  FacturaID?: number;
+  NumeroFactura?: string;
+  PDFUrl?: string;
+  MontoTotal?: string | number;
+}
+
+interface CuponRespuesta {
+  status?: string;
+  mensaje?: string;
+  PedidoID?: number;
+  Subtotal?: number;
+  DescuentoTotal?: number;
+  Total?: number;
+}
+
+const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const [carrito, setCarrito] = useState<Producto[]>([]);
-  const [cargando, setCargando] = useState(true);
 
-  // Estados del formulario y envío
-  const [email, setEmail] = useState("");
-  const [nombreTarjeta, setNombreTarjeta] = useState("");
-  const [numeroTarjeta, setNumeroTarjeta] = useState("");
-  const [vencimiento, setVencimiento] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exito, setExito] = useState(false);
+  const [datosFactura, setDatosFactura] = useState<FacturaRespuesta | null>(null);
+
+  // Lista de items en el carrito para mostrar el resumen correcto
+  const [itemsCarrito, setItemsCarrito] = useState<ProductoCarrito[]>([]);
+
+  // Lista dinámica de métodos de pago
+  const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
+  const [cargandoMetodos, setCargandoMetodos] = useState(true);
+
+  // Estados para Cupones
+  const [codigoCupon, setCodigoCupon] = useState("");
+  const [cargandoCupon, setCargandoCupon] = useState(false);
+  const [cuponInfo, setCuponInfo] = useState<CuponRespuesta | null>(null);
+  const [cuponMensaje, setCuponMensaje] = useState<string | null>(null);
+
+  // Datos del formulario de pago
+  const [nombreCliente, setNombreCliente] = useState("");
+  const [metodoPagoId, setMetodoPagoId] = useState<number>(1);
+  const [numTarjeta, setNumTarjeta] = useState("");
+  const [expiracion, setExpiracion] = useState("");
   const [cvv, setCvv] = useState("");
+  const [direccion, setDireccion] = useState("");
 
-  const [procesando, setProcesando] = useState(false);
-  const [errorPago, setErrorPago] = useState<string | null>(null);
-
+  // Cargar carrito desde localStorage
   useEffect(() => {
-    const dataGuardada = localStorage.getItem("carrito_nexus");
-    if (dataGuardada) {
+    const carritoGuardado = localStorage.getItem("carrito_nexus");
+    if (carritoGuardado) {
       try {
-        setCarrito(JSON.parse(dataGuardada));
+        setItemsCarrito(JSON.parse(carritoGuardado));
       } catch (e) {
-        console.error("Error al cargar la información del carrito", e);
+        console.error("Error al leer el carrito:", e);
       }
     }
-    setCargando(false);
   }, []);
 
-  function eliminarItem(index: number) {
-    const nuevoCarrito = carrito.filter((_, i) => i !== index);
-    setCarrito(nuevoCarrito);
-    localStorage.setItem("carrito_nexus", JSON.stringify(nuevoCarrito));
-  }
+  // Cargar lista de métodos de pago desde la API
+  useEffect(() => {
+    async function cargarMetodosPago() {
+      setCargandoMetodos(true);
+      try {
+        const res = await fetch(`${NGROK_BASE_URL}/info/metodospago`, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "ngrok-skip-browser-warning": "69420",
+          },
+        });
 
-  function calcularPrecioFinal(producto: Producto) {
-    return producto.precio * (1 - producto.descuento / 100);
-  }
+        if (res.ok) {
+          const data: MetodoPago[] = await res.json();
+          setMetodosPago(data);
+          if (data.length > 0) setMetodoPagoId(data[0].ID);
+        }
+      } catch (err) {
+        console.error("Error al cargar los métodos de pago:", err);
+      } finally {
+        setCargandoMetodos(false);
+      }
+    }
 
-  const subtotal = carrito.reduce((sum, item) => sum + item.precio, 0);
-  const totalConDescuento = carrito.reduce(
-    (sum, item) => sum + calcularPrecioFinal(item),
+    cargarMetodosPago();
+  }, []);
+
+  // Cargar datos del usuario guardados en localStorage
+  useEffect(() => {
+    const usuarioGuardado = localStorage.getItem("usuario_nexus");
+    if (usuarioGuardado) {
+      try {
+        const parsed = JSON.parse(usuarioGuardado);
+        setNombreCliente(parsed.nombre || parsed.username || "");
+      } catch (err) {
+        console.error("Error leyendo usuario de localStorage:", err);
+      }
+    } else {
+      setError("Debes iniciar sesión para realizar una compra.");
+    }
+  }, []);
+
+  const metodoSeleccionado = metodosPago.find((m) => m.ID === metodoPagoId);
+
+  // Cálculo estricto del precio por ítem aplicando descuento si es mayor a 0
+  const calcularPrecioItem = (item: ProductoCarrito) => {
+    const precioBase = Number(item.precio || 0);
+    const descuento = Number(item.descuento || 0);
+    if (descuento > 0 && descuento <= 100) {
+      return precioBase * (1 - descuento / 100);
+    }
+    return precioBase;
+  };
+
+  const subtotalCarrito = itemsCarrito.reduce(
+    (suma, item) => suma + calcularPrecioItem(item),
     0
   );
-  const totalAhorrado = subtotal - totalConDescuento;
 
-  // Integración de Pago mediante POST a API REST
-  async function manejarPago(e: React.FormEvent) {
-    e.preventDefault();
-    setProcesando(true);
-    setErrorPago(null);
+  const totalFinal = cuponInfo?.Total !== undefined ? cuponInfo.Total : subtotalCarrito;
+
+  // Función para aplicar cupón
+  const aplicarCupon = async () => {
+    if (!codigoCupon.trim()) return;
+    setCargandoCupon(true);
+    setCuponMensaje(null);
 
     try {
-      // Estructura del payload con la orden
-      const payloadOrden = {
-        clienteEmail: email,
-        pagoInfo: {
-          nombreTarjeta,
-          // Se envían datos procesables/enmascarados según la pasarela
-          ultimosDigitos: numeroTarjeta.slice(-4), 
-        },
-        items: carrito.map((p) => ({
-          productoId: p.id,
-          precioOriginal: p.precio,
-          precioFinal: calcularPrecioFinal(p),
-          descuento: p.descuento,
-        })),
-        total: totalConDescuento,
+      const token = localStorage.getItem("token_nexus");
+      const headersComunes = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "ngrok-skip-browser-warning": "69420",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const res = await fetch("/api/checkout", {
+      const res = await fetch(`${NGROK_BASE_URL}/comercial/aplicar-cupon`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payloadOrden),
+        credentials: "include",
+        headers: headersComunes,
+        body: JSON.stringify({ Codigo: codigoCupon.trim() }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "No se pudo procesar la transacción.");
+        throw new Error(data.detail || "Cupón no válido o expirado.");
       }
 
-      alert("¡Pago procesado con éxito! Tus claves digitales se han enviado a tu correo.");
-      localStorage.removeItem("carrito_nexus");
-      router.push("/");
+      setCuponInfo(data);
+      setCuponMensaje(data.mensaje || "¡Cupón aplicado con éxito!");
     } catch (err: any) {
-      console.error("Error en la transacción:", err);
-      setErrorPago(err.message || "Ocurrió un error al procesar el pago.");
+      console.error("Error al aplicar cupón:", err);
+      setCuponMensaje(err.message || "Error al aplicar el cupón.");
+      setCuponInfo(null);
     } finally {
-      setProcesando(false);
+      setCargandoCupon(false);
     }
-  }
+  };
 
-  if (cargando) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#100C18] text-white">
-        <p className="text-lg font-semibold text-purple-400">Cargando tu orden...</p>
-      </main>
-    );
-  }
+  const manejarPago = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setCargando(true);
+
+    try {
+      const token = localStorage.getItem("token_nexus");
+
+      const headersComunes = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "ngrok-skip-browser-warning": "69420",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const payloadPago = {
+        MetodoPagoID: Number(metodoPagoId),
+        NombreCliente: nombreCliente,
+        tarjeta: numTarjeta,
+        expiracion: expiracion,
+        cvv: cvv,
+        direccion: direccion,
+      };
+
+      const resPago = await fetch(`${NGROK_BASE_URL}/comercial/procesar-pago`, {
+        method: "POST",
+        credentials: "include",
+        headers: headersComunes,
+        body: JSON.stringify(payloadPago),
+      });
+
+      let responseData: any = {};
+      try {
+        responseData = await resPago.json();
+      } catch {
+        responseData = {};
+      }
+
+      if (!resPago.ok) {
+        let detalle = "Error al procesar el pago.";
+
+        if (Array.isArray(responseData.detail)) {
+          detalle = responseData.detail
+            .map((d: any) => `${d.loc ? d.loc.join("->") : "campo"}: ${d.msg}`)
+            .join(" | ");
+        } else if (typeof responseData.detail === "string") {
+          detalle = responseData.detail;
+        } else if (responseData.message) {
+          detalle = responseData.message;
+        }
+
+        if (detalle.includes("PENDIENTE_PAGO")) {
+          detalle = "No tienes un pedido pendiente activo. Asegúrate de agregar productos al carrito antes de pagar.";
+        }
+
+        throw new Error(detalle);
+      }
+
+      setDatosFactura(responseData);
+      localStorage.removeItem("carrito_nexus");
+      setExito(true);
+
+      setTimeout(() => {
+        router.push("/biblioteca");
+      }, 6000);
+
+    } catch (err: any) {
+      console.error("Error al procesar la compra:", err);
+      setError(err.message || "Ocurrió un problema durante el procesamiento de la compra.");
+    } finally {
+      setCargando(false);
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-[#100C18] text-white">
-      {/* HEADER */}
-      <header className="border-b border-purple-900/30 bg-[#100C18]/95 px-6 py-5 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-700">
-              🎮
-            </div>
-            <span className="text-2xl font-bold">
-              NEXUS<span className="text-green-500">GAMING</span>
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-semibold text-gray-400 transition hover:text-white"
-          >
+    <main className="min-h-screen bg-[#100C18] text-white flex flex-col justify-center items-center p-6">
+      <div className="w-full max-w-lg rounded-2xl border border-purple-900/40 bg-[#181323] p-8 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/" className="text-sm text-gray-400 hover:text-white transition">
             ← Volver a la tienda
           </Link>
+          <span className="text-xl font-bold tracking-wider">
+            NEXUS<span className="text-green-500">PAY</span>
+          </span>
         </div>
-      </header>
 
-      {/* CONTENIDO PRINCIPAL */}
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <h1 className="mb-8 text-3xl font-black">Finalizar Compra</h1>
+        <h1 className="text-2xl font-bold mb-2">Finalizar Compra</h1>
+        <p className="text-sm text-gray-400 mb-6">Revisa tu resumen e ingresa tu método de pago</p>
 
-        {carrito.length === 0 ? (
-          <div className="rounded-2xl border border-purple-900/40 bg-[#181323] p-12 text-center">
-            <div className="mb-4 text-5xl">🛒</div>
-            <h2 className="text-2xl font-bold">Tu carrito está vacío</h2>
-            <p className="mt-2 text-gray-400">
-              No has añadido ningún juego a tu lista de compra.
-            </p>
-            <Link
-              href="/"
-              className="mt-6 inline-block rounded-xl bg-purple-600 px-6 py-3 font-bold transition hover:bg-purple-500"
-            >
-              Explorar juegos
-            </Link>
+        {/* Resumen Rápido del Pedido en Checkout */}
+        <div className="mb-6 rounded-xl border border-purple-900/40 bg-[#211A2D]/40 p-4 space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-purple-400 mb-2">Resumen del Pedido</p>
+          <div className="max-h-36 overflow-y-auto space-y-2 text-xs text-gray-300">
+            {itemsCarrito.map((item, idx) => {
+              const precioFinalItem = calcularPrecioItem(item);
+              const tieneDescuento = Number(item.descuento || 0) > 0;
+
+              return (
+                <div key={idx} className="flex justify-between items-center border-b border-purple-900/20 pb-1">
+                  <span className="truncate pr-2">{item.titulo}</span>
+                  <div className="text-right whitespace-nowrap">
+                    <span className="text-green-400 font-semibold">Q{precioFinalItem.toFixed(2)}</span>
+                    {tieneDescuento && (
+                      <span className="block text-[10px] text-gray-500 line-through">
+                        Q{Number(item.precio).toFixed(2)} (-{item.descuento}%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ) : (
-          <form onSubmit={manejarPago} className="grid gap-10 lg:grid-cols-12">
-            {/* FORMULARIO DE PAGO */}
-            <div className="lg:col-span-7 space-y-6">
-              {errorPago && (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-                  {errorPago}
-                </div>
-              )}
 
-              <div className="rounded-2xl border border-purple-900/40 bg-[#181323] p-6">
-                <h2 className="mb-4 text-xl font-bold">1. Datos de Contacto</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-400">
-                      Correo Electrónico (para recibir los códigos)
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="tu@correo.com"
-                      className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
-                    />
-                  </div>
-                </div>
-              </div>
+          <div className="pt-2 border-t border-purple-900/40 flex justify-between text-sm font-bold">
+            <span>Total a Pagar:</span>
+            <span className="text-green-400 text-base">Q{totalFinal.toFixed(2)}</span>
+          </div>
+        </div>
 
-              <div className="rounded-2xl border border-purple-900/40 bg-[#181323] p-6">
-                <h2 className="mb-4 text-xl font-bold">2. Método de Pago</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-400">
-                      Nombre en la tarjeta
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={nombreTarjeta}
-                      onChange={(e) => setNombreTarjeta(e.target.value)}
-                      placeholder="Juan Pérez"
-                      className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
-                    />
-                  </div>
+        {exito && (
+          <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-5 text-center text-sm text-green-400 space-y-3">
+            <p className="font-bold text-base">🎉 ¡Pago procesado con éxito!</p>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-400">
-                      Número de tarjeta
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={numeroTarjeta}
-                      onChange={(e) => setNumeroTarjeta(e.target.value)}
-                      placeholder="4000 0000 0000 0000"
-                      className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
-                    />
-                  </div>
+            {datosFactura && (
+              <div className="rounded-lg bg-[#211A2D] p-4 text-left space-y-2 text-xs text-gray-300 border border-purple-900/40">
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">No. Factura:</span> 
+                  <span className="text-white font-mono">{datosFactura.NumeroFactura || "N/A"}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">Transacción ID:</span> 
+                  <span className="text-white font-mono">{datosFactura.TransaccionID || "N/A"}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">Monto Total:</span> 
+                  <span className="text-green-400 font-bold">Q{Number(datosFactura.MontoTotal || 0).toFixed(2)}</span>
+                </p>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-400">
-                        Vencimiento
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={vencimiento}
-                        onChange={(e) => setVencimiento(e.target.value)}
-                        placeholder="MM/AA"
-                        className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-400">
-                        CVV
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={cvv}
-                        onChange={(e) => setCvv(e.target.value)}
-                        placeholder="123"
-                        className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 text-white outline-none focus:border-purple-500"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={procesando}
-                    className="mt-6 w-full rounded-xl bg-green-600 py-4 font-bold text-lg transition hover:bg-green-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {procesando ? "Procesando orden..." : `Pagar Q${totalConDescuento.toFixed(2)}`}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* RESUMEN DEL PEDIDO */}
-            <div className="lg:col-span-5">
-              <div className="sticky top-28 rounded-2xl border border-purple-900/40 bg-[#181323] p-6">
-                <h2 className="mb-4 text-xl font-bold">Resumen del pedido ({carrito.length})</h2>
-
-                <div className="max-h-80 space-y-4 overflow-y-auto pr-1">
-                  {carrito.map((producto, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-4 rounded-xl bg-[#211A2D] p-3"
+                {datosFactura.PDFUrl && datosFactura.PDFUrl !== "string" && (
+                  <div className="pt-2">
+                    <a
+                      href={datosFactura.PDFUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block w-full rounded bg-purple-600 py-2 text-center font-bold text-white hover:bg-purple-500 transition shadow"
                     >
-                      <img
-                        src={producto.imagen}
-                        alt={producto.nombre}
-                        className="h-16 w-16 rounded-lg object-cover"
-                      />
-                      <div className="flex-1">
-                        <p className="font-bold text-sm">{producto.nombre}</p>
-                        <p className="text-xs text-gray-400">{producto.descripcion}</p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-sm font-black text-green-400">
-                            Q{calcularPrecioFinal(producto).toFixed(2)}
-                          </span>
-                          {producto.descuento > 0 && (
-                            <span className="text-xs text-gray-500 line-through">
-                              Q{producto.precio.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => eliminarItem(index)}
-                        className="text-gray-400 hover:text-red-400"
-                        title="Eliminar producto"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 space-y-2 border-t border-purple-900/40 pt-4 text-sm">
-                  <div className="flex justify-between text-gray-400">
-                    <span>Subtotal</span>
-                    <span>Q{subtotal.toFixed(2)}</span>
+                      📄 Ver / Descargar Factura PDF
+                    </a>
                   </div>
-                  <div className="flex justify-between text-green-400">
-                    <span>Descuentos aplicados</span>
-                    <span>-Q{totalAhorrado.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-purple-900/40 pt-3 text-lg font-black text-white">
-                    <span>Total a pagar</span>
-                    <span className="text-green-400">Q{totalConDescuento.toFixed(2)}</span>
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-          </form>
+            )}
+
+            <p className="text-xs text-purple-300 pt-1">Redirigiendo a tu biblioteca...</p>
+          </div>
         )}
+
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-center text-sm font-semibold text-red-400">
+            ⚠️ {error}
+          </div>
+        )}
+
+        <form onSubmit={manejarPago} className="space-y-4">
+          {/* SECCIÓN DE CUPÓN */}
+          <div className="rounded-xl border border-purple-900/40 bg-[#211A2D]/60 p-4 space-y-2">
+            <label className="block text-xs font-semibold uppercase text-gray-300">
+              ¿Tienes un código de descuento?
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={codigoCupon}
+                onChange={(e) => setCodigoCupon(e.target.value)}
+                placeholder="Ej. NEXUS2026"
+                className="w-full rounded-lg border border-purple-900/50 bg-[#181323] px-3 py-2 text-sm text-white outline-none focus:border-purple-500 transition uppercase"
+              />
+              <button
+                type="button"
+                onClick={aplicarCupon}
+                disabled={cargandoCupon || !codigoCupon.trim()}
+                className="rounded-lg bg-purple-700 px-4 py-2 text-xs font-bold text-white hover:bg-purple-600 transition disabled:opacity-50 whitespace-nowrap"
+              >
+                {cargandoCupon ? "Aplicando..." : "Aplicar Cupón"}
+              </button>
+            </div>
+
+            {cuponMensaje && (
+              <p className={`text-xs ${cuponInfo?.status === "error" || !cuponInfo ? "text-red-400" : "text-green-400"}`}>
+                {cuponMensaje}
+              </p>
+            )}
+
+            {cuponInfo && cuponInfo.Total !== undefined && (
+              <div className="pt-2 border-t border-purple-900/30 text-xs flex justify-between text-gray-300">
+                <span>Descuento aplicado: <strong className="text-green-400">Q{Number(cuponInfo.DescuentoTotal || 0).toFixed(2)}</strong></span>
+                <span>Nuevo Total: <strong className="text-green-400 font-bold">Q{Number(cuponInfo.Total || 0).toFixed(2)}</strong></span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+              Nombre del Titular / Cliente
+            </label>
+            <input
+              type="text"
+              required
+              value={nombreCliente}
+              onChange={(e) => setNombreCliente(e.target.value)}
+              placeholder="Ej. Juan Pérez"
+              className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+              Método de Pago
+            </label>
+            <select
+              disabled={cargandoMetodos}
+              value={metodoPagoId}
+              onChange={(e) => setMetodoPagoId(Number(e.target.value))}
+              className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition disabled:opacity-50"
+            >
+              {cargandoMetodos ? (
+                <option value="">Cargando métodos de pago...</option>
+              ) : (
+                metodosPago.map((m) => (
+                  <option key={m.ID} value={m.ID}>
+                    {m.Nombre}
+                  </option>
+                ))
+              )}
+            </select>
+            {metodoSeleccionado?.Instrucciones && (
+              <p className="mt-1 text-xs text-purple-400">
+                ℹ️ {metodoSeleccionado.Instrucciones}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+              Dirección de Facturación
+            </label>
+            <input
+              type="text"
+              required
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              placeholder="Calle Principal 123, Ciudad"
+              className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+              Número de Tarjeta / Referencia
+            </label>
+            <input
+              type="text"
+              required
+              maxLength={19}
+              value={numTarjeta}
+              onChange={(e) => setNumTarjeta(e.target.value)}
+              placeholder="4532 •••• •••• 8892"
+              className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+                Expiración
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="MM/AA"
+                maxLength={5}
+                value={expiracion}
+                onChange={(e) => setExpiracion(e.target.value)}
+                className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase text-gray-300 mb-1">
+                CVV
+              </label>
+              <input
+                type="password"
+                required
+                maxLength={4}
+                value={cvv}
+                onChange={(e) => setCvv(e.target.value)}
+                placeholder="123"
+                className="w-full rounded-xl border border-purple-900/50 bg-[#211A2D] px-4 py-3 text-sm text-white outline-none focus:border-purple-500 transition"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={cargando || cargandoMetodos || exito}
+            className="mt-6 w-full rounded-xl bg-purple-600 py-3.5 font-bold text-white transition hover:bg-purple-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-950"
+          >
+            {cargando ? "Procesando pago..." : "Confirmar y Pagar"}
+          </button>
+        </form>
       </div>
     </main>
   );

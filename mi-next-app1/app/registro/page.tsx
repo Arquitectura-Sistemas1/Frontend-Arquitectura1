@@ -17,6 +17,7 @@ export default function RegistroPage() {
   const [paso, setPaso] = useState<1 | 2>(1);
 
   const [paises, setPaises] = useState<Pais[]>([]);
+  const [cargandoPaises, setCargandoPaises] = useState(true);
 
   // Datos Paso 1
   const [nombres, setNombres] = useState("");
@@ -36,25 +37,39 @@ export default function RegistroPage() {
   const [error, setError] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
-  // Carga inicial de países desde FastAPI
+  // Carga de países llamando al endpoint correcto /info/paises
   useEffect(() => {
     async function cargarPaises() {
+      setCargandoPaises(true);
       try {
-        const res = await fetch(`${NGROK_BASE_URL}/paises`, {
+        const res = await fetch(`${NGROK_BASE_URL}/info/paises`, {
           method: "GET",
           headers: {
             "Accept": "application/json",
-            "ngrok-skip-browser-warning": "true",
+            "ngrok-skip-browser-warning": "69420",
           },
         });
-        if (res.ok) {
-          const data = await res.json();
-          setPaises(Array.isArray(data) ? data : data.data || []);
+
+        if (!res.ok) {
+          throw new Error(`Error HTTP: ${res.status}`);
         }
+
+        const data = await res.json();
+
+        // Mapeo utilizando ID y Nombre devueltos por la API
+        const paisesNormalizados = (Array.isArray(data) ? data : []).map((p: any) => ({
+          id: p.ID,
+          nombre: p.Nombre,
+        }));
+
+        setPaises(paisesNormalizados);
       } catch (err) {
         console.error("Error al cargar la lista de países:", err);
+      } finally {
+        setCargandoPaises(false);
       }
     }
+
     cargarPaises();
   }, []);
 
@@ -62,6 +77,13 @@ export default function RegistroPage() {
   async function manejarFormulario1(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const idPaisNumerico = Number(paisId);
+    if (!paisId || isNaN(idPaisNumerico) || idPaisNumerico <= 0) {
+      setError("Por favor, selecciona un país válido de la lista.");
+      return;
+    }
+
     setCargando(true);
 
     try {
@@ -70,7 +92,7 @@ export default function RegistroPage() {
         apellidos,
         fecha_nacimiento: fechaNacimiento,
         correo,
-        pais_id: Number(paisId),
+        pais_id: idPaisNumerico,
         usuario,
         password,
         telefono,
@@ -78,10 +100,11 @@ export default function RegistroPage() {
 
       const res = await fetch(`${NGROK_BASE_URL}/auth/solicitud-usuario`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "ngrok-skip-browser-warning": "true",
+          "ngrok-skip-browser-warning": "69420",
         },
         body: JSON.stringify(payloadForm1),
       });
@@ -89,10 +112,12 @@ export default function RegistroPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.detail || data.message || "Error al procesar la solicitud inicial.");
+        const detalle = Array.isArray(data.detail)
+          ? data.detail.map((d: any) => `${d.loc ? d.loc.join("->") : "campo"}: ${d.msg}`).join(" | ")
+          : data.message || data.detail || "Error al procesar la solicitud inicial.";
+        throw new Error(detalle);
       }
 
-      // Éxito en Paso 1, avanzamos al Paso 2
       setPaso(2);
     } catch (err: any) {
       setError(err.message || "Solicitud fallida. Revisa los datos ingresados.");
@@ -109,16 +134,17 @@ export default function RegistroPage() {
 
     try {
       const payloadForm2 = {
-        usuario, // Reutiliza el estado guardado del paso 1
-        codigo,
+        usuario,
+        codigo: codigo.trim(),
       };
 
       const res = await fetch(`${NGROK_BASE_URL}/auth/confirmar-registro`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "ngrok-skip-browser-warning": "true",
+          "ngrok-skip-browser-warning": "69420",
         },
         body: JSON.stringify(payloadForm2),
       });
@@ -126,7 +152,10 @@ export default function RegistroPage() {
       const jsonResponse = await res.json();
 
       if (!res.ok) {
-        throw new Error(jsonResponse.detail || jsonResponse.message || "El código ingresado es incorrecto o expiró.");
+        const detalle = Array.isArray(jsonResponse.detail)
+          ? jsonResponse.detail.map((d: any) => `${d.loc ? d.loc.join("->") : "campo"}: ${d.msg}`).join(" | ")
+          : jsonResponse.message || jsonResponse.detail || "El código ingresado es incorrecto o expiró.";
+        throw new Error(detalle);
       }
 
       setMensajeExito(jsonResponse.message || "¡Cuenta creada exitosamente!");
@@ -257,11 +286,14 @@ export default function RegistroPage() {
               </label>
               <select
                 required
+                disabled={cargandoPaises}
                 value={paisId}
                 onChange={(e) => setPaisId(e.target.value)}
-                className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-2.5 text-sm text-white outline-none focus:border-purple-500"
+                className="w-full rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-2.5 text-sm text-white outline-none focus:border-purple-500 disabled:opacity-50"
               >
-                <option value="">-- Selecciona un país --</option>
+                <option value="">
+                  {cargandoPaises ? "Cargando países..." : "-- Selecciona un país --"}
+                </option>
                 {paises.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nombre}
@@ -301,7 +333,7 @@ export default function RegistroPage() {
 
             <button
               type="submit"
-              disabled={cargando}
+              disabled={cargando || cargandoPaises}
               className="mt-6 w-full rounded-xl bg-purple-600 py-3.5 font-bold text-white transition hover:bg-purple-500 disabled:opacity-50"
             >
               {cargando ? "Enviando solicitud..." : "Siguiente paso →"}

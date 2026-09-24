@@ -42,7 +42,7 @@ interface Producto {
 }
 
 export default function Inventario() {
-  const [seccion, setSeccion] = useState<Seccion>('juegos');
+  const [seccion, setSeccion] = useState<string>('juegos');
   const [mostrarFormularioJuego, setMostrarFormularioJuego] = useState(false);
   const [mostrarFormularioProducto, setMostrarFormularioProducto] = useState(false);
   const [mostrarFormularioTarifa, setMostrarFormularioTarifa] = useState(false);
@@ -51,12 +51,15 @@ export default function Inventario() {
   const [precioRenta, setPrecioRenta] = useState('');
   const [duracionRentaHoras, setDuracionRentaHoras] = useState('');
   const [descuentos, setDescuentos] = useState<Descuento[]>([]);
+  const [cargando, setCargando] = useState<boolean>(false);
+  const [tarifas, setTarifas] = useState<Tarifa[]>([]);
 
 // Estados para el formulario de Creación
 const [tipoDescuento, setTipoDescuento] = useState('PORCENTAJE');
 const [valorDescuento, setValorDescuento] = useState('');
 const [fechaInicio, setFechaInicio] = useState('');
 const [fechaFin, setFechaFin] = useState('');
+
   
 
 //Peticion a la API para obtener los videojuegos
@@ -130,7 +133,18 @@ useEffect(() => {
   cargarJuegos();
 }, []);
 
- const guardarTarifa = async () => {
+const guardarTarifa = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  const vVenta = Number(precioVenta);
+  const vRenta = Number(precioRenta);
+  const vHoras = Number(duracionRentaHoras);
+
+  if (vVenta <= 0 || vRenta <= 0 || vHoras <= 0) {
+    alert('Por favor ingresa valores mayores a 0 en todos los campos.');
+    return;
+  }
+
   try {
     const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/financiero/crear-tarifa', {
       method: 'POST',
@@ -140,32 +154,29 @@ useEffect(() => {
       },
       credentials: 'include',
       body: JSON.stringify({
-        PrecioVenta: Number(precioVenta),
-        PrecioRenta: Number(precioRenta),
-        DuracionRentaHoras: Number(duracionRentaHoras),
+        PrecioVenta: vVenta,
+        PrecioRenta: vRenta,
+        DuracionRentaHoras: vHoras,
       }),
     });
 
     if (res.ok) {
-      // Limpia campos o cierra el modal si tienes un estado para ello
       setPrecioVenta('');
       setPrecioRenta('');
       setDuracionRentaHoras('');
-      
-      // Vuelve a cargar las tarifas desde la API
-      cargarTarifas(); 
+      setMostrarFormularioTarifa(false);
+      cargarTarifas();
     } else {
-      console.error('Error al guardar tarifa:', res.status, res.statusText);
-      const errorText = await res.text();
-      console.error('Detalle del error:', errorText);
+      console.error('Error desde la API:', res.status);
+      const errDetail = await res.text();
+      console.error('Detalle:', errDetail);
     }
   } catch (error) {
-    console.error('Error de red al guardar tarifa:', error);
+    console.error('Error de red:', error);
   }
 };
 
-const [tarifas, setTarifas] = useState<Tarifa[]>([]);
-const [cargando, setCargando] = useState<boolean>(false);
+
 
 const cargarTarifas = async () => {
   try {
@@ -347,7 +358,7 @@ const productos: Producto[] = [
                  : 'text-slate-400 hover:bg-slate-800'
                     }`}
               >
-                     📦 Productos
+                     📦 Cupones
             </button>
             <button
               onClick={() => setSeccion('tarifas')}
@@ -929,14 +940,15 @@ const productos: Producto[] = [
           Precio de venta
         </label>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
-      </div>
+       <input
+      type="number"
+      min="1"
+      value={precioVenta}
+      onChange={(e) => setPrecioVenta(e.target.value)}
+     placeholder="Ej. 450"
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white"
+      required
+      />
 
       {/* PRECIO DE RENTA */}
       <div>
@@ -945,12 +957,14 @@ const productos: Producto[] = [
         </label>
 
         <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
+      type="number"
+      min="1"
+      value={precioRenta}
+      onChange={(e) => setPrecioRenta(e.target.value)}
+      placeholder="Ej. 45"
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white"
+      required
+      />
       </div>
 
       {/* DURACIÓN */}
@@ -960,11 +974,14 @@ const productos: Producto[] = [
         </label>
 
         <input
-          type="number"
-          min="1"
-          placeholder="Ej. 24"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
+      type="number"
+     min="1"
+    value={duracionRentaHoras}
+    onChange={(e) => setDuracionRentaHoras(e.target.value)}
+    placeholder="Ej. 24"
+    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white"
+    required
+    />
       </div>
 
     </div>
@@ -989,7 +1006,8 @@ const productos: Producto[] = [
     </div>
 
   </div>
-)}
+)
+
             {/* TARJETAS DE TARIFAS */}
 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
@@ -1060,6 +1078,8 @@ const productos: Producto[] = [
 
     </div>
 
+
+
   ))}
 
 </div>
@@ -1068,7 +1088,7 @@ const productos: Producto[] = [
         )}
 
 {/* ================= DESCUENTOS ================= */}
-{seccion === 'descuentos' && (
+ {(seccion as string) === 'descuentos' && (
   <div className="space-y-6">
 
     <div className="flex justify-between items-center">
@@ -1240,13 +1260,11 @@ const productos: Producto[] = [
         </tbody>
       </table>
     </div>
+   </div>
+      </div>
+    )}
 
-  </div>
-)}
-
-      </main>
-
-    </div>
-    
+  </main>
+</div>
   );
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 
+const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -20,11 +22,13 @@ export default function LoginPage() {
     setCargando(true);
 
     try {
-      const res = await fetch("https://sedation-scribe-state.ngrok-free.dev/auth/login", {
+      const res = await fetch(`${NGROK_BASE_URL}/auth/login`, {
         method: "POST",
+        credentials: "include", // OBLIGATORIO: Mantiene la cookie de sesión de FastAPI/ngrok
         headers: { 
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true"
+          "Accept": "application/json",
+          "ngrok-skip-browser-warning": "69420"
         },
         body: JSON.stringify({ 
           usuario: usuario, 
@@ -35,7 +39,10 @@ export default function LoginPage() {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.message || "Usuario o contraseña incorrectos.");
+        const detalle = Array.isArray(data.detail)
+          ? data.detail.map((d: any) => `${d.loc ? d.loc.join("->") : "campo"}: ${d.msg}`).join(" | ")
+          : data.message || data.detail || "Usuario o contraseña incorrectos.";
+        throw new Error(detalle);
       }
 
       // Estructura normalizada de datos de usuario
@@ -47,6 +54,7 @@ export default function LoginPage() {
       };
 
       localStorage.setItem("usuario_nexus", JSON.stringify(datosUsuario));
+      
       if (data.token) {
         localStorage.setItem("token_nexus", data.token);
       }
