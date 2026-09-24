@@ -1147,7 +1147,7 @@ const productos: Producto[] = [
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
             >
               <option value="PORCENTAJE">PORCENTAJE</option>
-              <option value="MONTO">MONTO_FIJO</option>
+              <option value="MONTO_FIJO">MONTO_FIJO</option>
             </select>
           </div>
 
