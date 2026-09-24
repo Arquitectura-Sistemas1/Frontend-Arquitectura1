@@ -394,7 +394,7 @@ const productos: Producto[] = [
       </aside>
 
       {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto p-8 bg-slate-950">
+<main className="flex-1 overflow-y-auto p-8 bg-slate-950">
 
         {/* ENCABEZADO */}
         <div className="mb-8">
@@ -562,6 +562,8 @@ const productos: Producto[] = [
 
     </div>
 
+
+  
     <div className="flex justify-end gap-3 mt-6">
 
       <button
@@ -577,12 +579,12 @@ const productos: Producto[] = [
      className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
       >
   Guardar videojuego
-</button>
+  </button>
 
     </div>
-
   </div>
-)}    
+ )}
+
 
     {/* RESUMEN DE VIDEOJUEGOS */}
 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -940,16 +942,16 @@ const productos: Producto[] = [
           Precio de venta
         </label>
 
-       <input
-      type="number"
-      min="1"
-      value={precioVenta}
-      onChange={(e) => setPrecioVenta(e.target.value)}
-     placeholder="Ej. 450"
-      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white"
-      required
-      />
-
+              <input
+          type="number"
+          min="1"
+          value={precioVenta}
+          onChange={(e) => setPrecioVenta(e.target.value)}
+          placeholder="Ej. 450"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white"
+          required
+        />
+      </div>   {/* <--- AGREGA ESTE CIERRE AQUÍ */}
       {/* PRECIO DE RENTA */}
       <div>
         <label className="block text-sm text-slate-300 mb-2">
@@ -1006,7 +1008,7 @@ const productos: Producto[] = [
     </div>
 
   </div>
-)
+ )}
 
             {/* TARJETAS DE TARIFAS */}
 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1111,7 +1113,6 @@ const productos: Producto[] = [
     </div>
 
     {mostrarFormularioDescuento && (
-      /* El <form> sólo envuelve la tarjeta del formulario */
       <form onSubmit={crearDescuento} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
 
         <div className="flex justify-between items-center mb-6">
@@ -1214,7 +1215,7 @@ const productos: Producto[] = [
           </button>
         </div>
 
-      </form> /* Cierre correcto del form */
+      </form> 
     )}
 
     {/* TABLA DE DESCUENTOS */}
@@ -1257,14 +1258,13 @@ const productos: Producto[] = [
               </td>
             </tr>
           ))}
-        </tbody>
+              </tbody>
       </table>
     </div>
    </div>
-      </div>
-    )}
+  )}
 
-  </main>
-</div>
-  );
+   </main>
+  </div>
+ );
 }
