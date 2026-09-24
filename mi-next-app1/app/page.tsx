@@ -131,7 +131,7 @@ export default function Home() {
           };
 
           const descuentoValor = parseFloat(item.descuento_valor ?? item.descuento ?? 0);
-          const tipoDesc: "porcentaje" | "monto" = item.tipo_descuento === "monto" || item.es_monto_fijo ? "monto" : "porcentaje";
+          const tipoDesc: "porcentaje" | "monto" = (item.descuento_tipo === "MONTO_FIJO" || item.tipo_descuento === "monto" || item.es_monto_fijo) ? "monto" : "porcentaje";
 
           productosUnicos.push({
             id: idJuego,
@@ -353,6 +353,15 @@ export default function Home() {
                 </span>
               )}
             </button>
+            {mounted && usuarioActual && (usuarioActual.rol === "ADMIN" || usuarioActual.rol === "administrador" || usuarioActual.rol === "admin" || usuarioActual.is_staff || usuarioActual.is_superuser) && (
+              <button
+                type="button"
+                onClick={() => router.push("/Inventario")}
+                className="hidden text-sm font-bold text-purple-400 hover:text-purple-300 md:block"
+              >
+                Inventario
+              </button>
+            )}
             {mounted && usuarioActual ? (
               <button type="button" onClick={cerrarSesion} className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400">
                 Salir

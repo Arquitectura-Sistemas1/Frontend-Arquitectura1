@@ -5,7 +5,10 @@ import React, { useState, useEffect } from 'react';
 type Seccion = 'juegos' | 'productos' | 'tarifas' | 'descuentos';
 
 interface Juego {
-  videojuego_id: number;
+  videojuego_id?: number;
+  ID?: number;
+  id?: number;
+  VideojuegoID?: number;
   plataforma_id: number;
   clasificacion_id: number;
   region_id: number;
@@ -47,6 +50,8 @@ export default function Inventario() {
   const [mostrarFormularioProducto, setMostrarFormularioProducto] = useState(false);
   const [mostrarFormularioTarifa, setMostrarFormularioTarifa] = useState(false);
   const [mostrarFormularioDescuento, setMostrarFormularioDescuento] = useState(false);
+  const [mostrarModalAsignar, setMostrarModalAsignar] = useState(false);
+  const [juegoSeleccionado, setJuegoSeleccionado] = useState<number | null>(null);
   const [precioVenta, setPrecioVenta] = useState('');
   const [precioRenta, setPrecioRenta] = useState('');
   const [duracionRentaHoras, setDuracionRentaHoras] = useState('');
@@ -264,6 +269,10 @@ const crearDescuento = async (e: React.FormEvent) => {
 // 3. POST: Asignar Descuento a un Videojuego
 const asignarDescuento = async (e: React.FormEvent) => {
   e.preventDefault();
+  if (juegoSeleccionado === null || !descuentoID) {
+    alert('Seleccione un descuento');
+    return;
+  }
   try {
     const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/financiero/asignar-descuento', {
       method: 'POST',
@@ -273,15 +282,17 @@ const asignarDescuento = async (e: React.FormEvent) => {
       },
       credentials: 'include',
       body: JSON.stringify({
-        VideojuegoID: Number(juegos[0]?.videojuego_id), // Aquí deberías reemplazar con el ID del videojuego seleccionado
+        VideojuegoID: juegoSeleccionado,
         DescuentoID: Number(descuentoID),
       }),
     });
 
     if (res.ok) {
-      setJuegos([]); // Limpiar la lista de juegos para forzar la recarga
+      setMostrarModalAsignar(false);
+      setJuegoSeleccionado(null);
       setDescuentoID('');
       alert('Descuento asignado correctamente al videojuego');
+      cargarJuegos();
     } else {
       console.error('Error al asignar descuento:', res.status);
     }
@@ -642,10 +653,10 @@ const productos: Producto[] = [
     <tbody className="divide-y divide-slate-800">
 
       {juegos.map((juego, index) => (
-        <tr key={juego.videojuego_id || index} className="hover:bg-slate-800/30">
+        <tr key={juego.videojuego_id ?? juego.ID ?? juego.id ?? juego.VideojuegoID ?? index} className="hover:bg-slate-800/30">
 
           <td className="p-4">
-            #{juego.videojuego_id}
+            #{juego.videojuego_id ?? juego.ID ?? juego.id ?? juego.VideojuegoID}
           </td> 
 
           <td className="p-4 font-medium text-white">
@@ -676,10 +687,16 @@ const productos: Producto[] = [
           </td>
 
           <td className="p-4 whitespace-nowrap">
-            <button className="text-purple-400 hover:text-purple-300 mr-4">
-              Editar
+            <button 
+              onClick={() => {
+                const id = juego.videojuego_id ?? juego.ID ?? juego.id ?? juego.VideojuegoID ?? null;
+                setJuegoSeleccionado(id);
+                setMostrarModalAsignar(true);
+              }}
+              className="text-green-400 hover:text-green-300 mr-4"
+            >
+              Asignar Descuento
             </button>
-
             <button className="text-red-400 hover:text-red-300">
               Eliminar
             </button>
@@ -1263,6 +1280,51 @@ const productos: Producto[] = [
     </div>
    </div>
   )}
+
+      {mostrarModalAsignar && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-96">
+            <h3 className="text-xl font-bold text-white mb-4">Asignar Descuento</h3>
+            <form onSubmit={asignarDescuento}>
+              <div className="mb-4">
+                <label className="block text-sm text-slate-300 mb-2">Seleccione un descuento</label>
+                <select
+                  value={descuentoID}
+                  onChange={(e) => setDescuentoID(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+                  required
+                >
+                  <option value="">-- Seleccionar --</option>
+                  {descuentos.map((desc) => (
+                    <option key={desc.ID} value={desc.ID}>
+                      {desc.Tipo === 'PORCENTAJE' ? `${desc.Valor}%` : `Q ${desc.Valor}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostrarModalAsignar(false);
+                    setJuegoSeleccionado(null);
+                    setDescuentoID('');
+                  }}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold"
+                >
+                  Asignar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
    </main>
   </div>
