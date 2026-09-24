@@ -12,6 +12,8 @@ interface Mensaje {
 
 interface Ticket {
   id: string;
+  devolucionId?: number; 
+  empleadoId?: number;   
   cliente: string;
   correo: string;
   asunto: string;
@@ -23,11 +25,14 @@ interface Ticket {
   mensajes: Mensaje[];
 }
 
+const API_BASE_URL = 'https://sedation-scribe-state.ngrok-free.dev';
+
 export default function SoporteAdminPage() {
-  // Datos de prueba para tickets de soporte
   const [tickets, setTickets] = useState<Ticket[]>([
     {
       id: 'TCK-801',
+      devolucionId: 12,
+      empleadoId: 1,
       cliente: 'Carlos López',
       correo: 'carlos@gmail.com',
       asunto: 'Error al canjear código de juego',
@@ -47,40 +52,15 @@ export default function SoporteAdminPage() {
       ]
     },
     {
-      id: 'TCK-802',
-      cliente: 'Ana Martínez',
-      correo: 'ana.m@gmail.com',
-      asunto: 'Consulta sobre cargos duplicados en renta',
-      categoria: 'PAGOS_FACTURACION',
-      prioridad: 'MEDIA',
-      estado: 'EN_PROCESO',
-      agenteAsignado: 'Marcos Solís',
-      fechaCreacion: '2026-08-27 10:15',
-      mensajes: [
-        {
-          id: 1,
-          remitente: 'CLIENTE',
-          autor: 'Ana Martínez',
-          texto: 'Hola, me aparece un doble cobro en mi tarjeta por la renta de Helldivers 2.',
-          fecha: '2026-08-27 10:15'
-        },
-        {
-          id: 2,
-          remitente: 'SOPORTE',
-          autor: 'Marcos Solís',
-          texto: 'Hola Ana, estamos revisando la pasarela de pagos para efectuar la devolución del monto duplicado.',
-          fecha: '2026-08-27 11:00'
-        }
-      ]
-    },
-    {
       id: 'TCK-803',
+      devolucionId: 15,
+      empleadoId: 1,
       cliente: 'Juan Pérez',
       correo: 'juanp@gmail.com',
       asunto: 'Solicitud de reembolso por compra fallida',
       categoria: 'DEVOLUCIONES',
       prioridad: 'BAJA',
-      estado: 'RESUELTO',
+      estado: 'ABIERTO',
       agenteAsignado: 'Lucía Gómez',
       fechaCreacion: '2026-08-25 09:00',
       mensajes: [
@@ -90,13 +70,6 @@ export default function SoporteAdminPage() {
           autor: 'Juan Pérez',
           texto: 'Buenas tardes, solicito la devolución de la tarjeta de regalo.',
           fecha: '2026-08-25 09:00'
-        },
-        {
-          id: 2,
-          remitente: 'SOPORTE',
-          autor: 'Lucía Gómez',
-          texto: 'Estimado Juan, la devolución ha sido procesada exitosamente a tu cuenta.',
-          fecha: '2026-08-25 10:30'
         }
       ]
     }
@@ -105,11 +78,65 @@ export default function SoporteAdminPage() {
   const [ticketSeleccionado, setTicketSeleccionado] = useState<Ticket | null>(tickets[0]);
   const [filtroEstado, setFiltroEstado] = useState<'TODOS' | 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO'>('TODOS');
   const [nuevoMensaje, setNuevoMensaje] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  // Filtrado de tickets
-  const ticketsFiltrados = tickets.filter(t => filtroEstado === 'TODOS' || t.estado === filtroEstado);
+  // Petición a la API para actualizar el estado de la devolución
+  const actualizarEstadoDevolucion = async (
+    devolucionId: number,
+    empleadoId: number,
+    estadoNuevo: string,
+    notas: string
+  ) => {
+    try {
+      setCargando(true);
+      const response = await fetch(`${API_BASE_URL}/gestion/actualizar-estado-devolucion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          DevolucionID: devolucionId,
+          EmpleadoID: empleadoId,
+          EstadoNuevo: estadoNuevo, // 'EN_PROCESO', 'APROBADA', 'RECHAZADA', etc.
+          NotasAdministrador: notas,
+        }),
+      });
 
-  // Enviar respuesta
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+
+      alert(`Estado actualizado a: ${estadoNuevo}`);
+    } catch (error) {
+      console.error('Error al actualizar el estado:', error);
+      alert('Error al conectar con la API de actualización de devolución.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const cambiarEstado = async (nuevoEstado: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO') => {
+    if (!ticketSeleccionado) return;
+
+    // Si el ticket cuenta con devolución e IDs, notificar a la API backend
+    if (ticketSeleccionado.devolucionId && ticketSeleccionado.empleadoId) {
+      const estadoApi = nuevoEstado === 'RESUELTO' ? 'APROBADA' : 'EN_PROCESO';
+      await actualizarEstadoDevolucion(
+        ticketSeleccionado.devolucionId,
+        ticketSeleccionado.empleadoId,
+        estadoApi,
+        `Cambio de estado manual a ${nuevoEstado}`
+      );
+    }
+
+    const ticketsActualizados = tickets.map((t) =>
+      t.id === ticketSeleccionado.id ? { ...t, estado: nuevoEstado } : t
+    );
+    setTickets(ticketsActualizados);
+    setTicketSeleccionado({ ...ticketSeleccionado, estado: nuevoEstado });
+  };
+
   const handleEnviarRespuesta = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoMensaje.trim() || !ticketSeleccionado) return;
@@ -119,15 +146,15 @@ export default function SoporteAdminPage() {
       remitente: 'SOPORTE',
       autor: 'Agente Soporte (Tú)',
       texto: nuevoMensaje,
-      fecha: new Date().toISOString().replace('T', ' ').substring(0, 16)
+      fecha: new Date().toISOString().replace('T', ' ').substring(0, 16),
     };
 
-    const ticketsActualizados = tickets.map(t => {
+    const ticketsActualizados = tickets.map((t) => {
       if (t.id === ticketSeleccionado.id) {
         return {
           ...t,
           estado: t.estado === 'ABIERTO' ? ('EN_PROCESO' as const) : t.estado,
-          mensajes: [...t.mensajes, respuesta]
+          mensajes: [...t.mensajes, respuesta],
         };
       }
       return t;
@@ -137,41 +164,31 @@ export default function SoporteAdminPage() {
     setTicketSeleccionado({
       ...ticketSeleccionado,
       estado: ticketSeleccionado.estado === 'ABIERTO' ? 'EN_PROCESO' : ticketSeleccionado.estado,
-      mensajes: [...ticketSeleccionado.mensajes, respuesta]
+      mensajes: [...ticketSeleccionado.mensajes, respuesta],
     });
     setNuevoMensaje('');
   };
 
-  // Cambiar estado del ticket
-  const cambiarEstado = (nuevoEstado: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO') => {
-    if (!ticketSeleccionado) return;
-    const ticketsActualizados = tickets.map(t => 
-      t.id === ticketSeleccionado.id ? { ...t, estado: nuevoEstado } : t
-    );
-    setTickets(ticketsActualizados);
-    setTicketSeleccionado({ ...ticketSeleccionado, estado: nuevoEstado });
-  };
+  const ticketsFiltrados = tickets.filter(
+    (t) => filtroEstado === 'TODOS' || t.estado === filtroEstado
+  );
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans">
-      
-      {/* LISTA DE TICKETS (PANEL IZQUIERDO) */}
       <div className="w-1/3 border-r border-slate-800 flex flex-col bg-slate-900">
-        
-        {/* ENCABEZADO Y FILTROS */}
         <div className="p-4 border-b border-slate-800 space-y-3">
-            <center>
+          <center>
             <img src="/logo.png" alt="Nexus Games Logo" className="h-24 w-auto object-contain" />
-          <h1 className="text-xl font-bold text-white">📩 Lista de Solicitudes</h1>
-            </center>
+            <h1 className="text-xl font-bold text-white">📩 Lista de Solicitudes</h1>
+          </center>
           <div className="flex gap-2 text-xs overflow-x-auto pb-1">
-            {(['TODOS', 'ABIERTO', 'EN_PROCESO', 'RESUELTO'] as const).map(est => (
+            {(['TODOS', 'ABIERTO', 'EN_PROCESO', 'RESUELTO'] as const).map((est) => (
               <button
                 key={est}
                 onClick={() => setFiltroEstado(est)}
                 className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                  filtroEstado === est 
-                    ? 'bg-purple-600 text-white' 
+                  filtroEstado === est
+                    ? 'bg-purple-600 text-white'
                     : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}
               >
@@ -181,9 +198,8 @@ export default function SoporteAdminPage() {
           </div>
         </div>
 
-        {/* LISTADO */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
-          {ticketsFiltrados.map(ticket => (
+          {ticketsFiltrados.map((ticket) => (
             <div
               key={ticket.id}
               onClick={() => setTicketSeleccionado(ticket)}
@@ -193,34 +209,30 @@ export default function SoporteAdminPage() {
             >
               <div className="flex justify-between items-start mb-1">
                 <span className="text-xs font-mono text-purple-400 font-semibold">{ticket.id}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  ticket.estado === 'ABIERTO' ? 'bg-red-500/10 text-red-400' :
-                  ticket.estado === 'EN_PROCESO' ? 'bg-amber-500/10 text-amber-400' : 'bg-lime-500/10 text-lime-400'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    ticket.estado === 'ABIERTO'
+                      ? 'bg-red-500/10 text-red-400'
+                      : ticket.estado === 'EN_PROCESO'
+                      ? 'bg-amber-500/10 text-amber-400'
+                      : 'bg-lime-500/10 text-lime-400'
+                  }`}
+                >
                   {ticket.estado.replace('_', ' ')}
                 </span>
               </div>
               <h3 className="font-semibold text-sm text-white truncate">{ticket.asunto}</h3>
-              <p className="text-xs text-slate-400 mt-1 truncate">{ticket.cliente} • {ticket.correo}</p>
-              <div className="flex justify-between items-center mt-2 text-[11px] text-slate-500">
-                <span>{ticket.fechaCreacion}</span>
-                <span className={`font-semibold ${
-                  ticket.prioridad === 'ALTA' ? 'text-red-400' :
-                  ticket.prioridad === 'MEDIA' ? 'text-amber-400' : 'text-slate-400'
-                }`}>
-                  Prioridad {ticket.prioridad}
-                </span>
-              </div>
+              <p className="text-xs text-slate-400 mt-1 truncate">
+                {ticket.cliente} • {ticket.correo}
+              </p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* DETALLE DEL TICKET Y DETALLE DE CONVERSACIÓN (PANEL DERECHO) */}
       <div className="flex-1 flex flex-col bg-slate-950">
         {ticketSeleccionado ? (
           <>
-            {/* ENCABEZADO DEL TICKET */}
             <div className="p-6 border-b border-slate-800 bg-slate-900/60 flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-3">
@@ -230,39 +242,43 @@ export default function SoporteAdminPage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Cliente: <span className="text-slate-200">{ticketSeleccionado.cliente}</span> ({ticketSeleccionado.correo}) | Asignado a: <span className="text-purple-300">{ticketSeleccionado.agenteAsignado}</span>
+                  Cliente: <span className="text-slate-200">{ticketSeleccionado.cliente}</span> (
+                  {ticketSeleccionado.correo}) | Asignado a:{' '}
+                  <span className="text-purple-300">{ticketSeleccionado.agenteAsignado}</span>
                 </p>
               </div>
 
-              {/* ACCIONES DE ESTADO */}
               <div className="flex gap-2">
                 <button
+                  disabled={cargando}
                   onClick={() => cambiarEstado('EN_PROCESO')}
-                  className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-lg text-xs font-semibold border border-amber-500/30 transition"
+                  className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-lg text-xs font-semibold border border-amber-500/30 transition disabled:opacity-50"
                 >
                   En Proceso
                 </button>
                 <button
+                  disabled={cargando}
                   onClick={() => cambiarEstado('RESUELTO')}
-                  className="px-3 py-1.5 bg-lime-500/10 hover:bg-lime-500/20 text-lime-300 rounded-lg text-xs font-semibold border border-lime-500/30 transition"
+                  className="px-3 py-1.5 bg-lime-500/10 hover:bg-lime-500/20 text-lime-300 rounded-lg text-xs font-semibold border border-lime-500/30 transition disabled:opacity-50"
                 >
                   Resolver Ticket
                 </button>
               </div>
             </div>
 
-            {/* CONVERSACIÓN / HISTORIAL DE MENSAJES */}
             <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              {ticketSeleccionado.mensajes.map(msg => (
+              {ticketSeleccionado.mensajes.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex flex-col ${msg.remitente === 'SOPORTE' ? 'items-end' : 'items-start'}`}
                 >
-                  <div className={`max-w-xl rounded-2xl p-4 text-sm ${
-                    msg.remitente === 'SOPORTE'
-                      ? 'bg-purple-900/40 border border-purple-700/50 text-slate-100 rounded-tr-none'
-                      : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
-                  }`}>
+                  <div
+                    className={`max-w-xl rounded-2xl p-4 text-sm ${
+                      msg.remitente === 'SOPORTE'
+                        ? 'bg-purple-900/40 border border-purple-700/50 text-slate-100 rounded-tr-none'
+                        : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                    }`}
+                  >
                     <div className="flex justify-between items-center gap-4 mb-1 border-b border-slate-700/40 pb-1 text-[11px]">
                       <span className="font-bold text-purple-300">{msg.autor}</span>
                       <span className="text-slate-400">{msg.fecha}</span>
@@ -273,7 +289,6 @@ export default function SoporteAdminPage() {
               ))}
             </div>
 
-            {/* ÁREA DE RESPUESTA */}
             <form onSubmit={handleEnviarRespuesta} className="p-4 border-t border-slate-800 bg-slate-900">
               <div className="flex gap-3">
                 <textarea
@@ -298,7 +313,6 @@ export default function SoporteAdminPage() {
           </div>
         )}
       </div>
-
     </div>
   );
 }

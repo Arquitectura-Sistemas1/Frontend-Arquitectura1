@@ -1,33 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type Seccion = 'juegos' | 'productos' | 'tarifas' | 'descuentos';
 
 interface Juego {
-  id: number;
+  videojuego_id: number;
+  plataforma_id: number;
+  clasificacion_id: number;
+  region_id: number;
+  tarifa_id: number;
   titulo: string;
-  clasificacion: string;
-  fechaLanzamiento: string;
-  numeroJugadores: number;
   edicion: string;
-  idioma: string;
+  fecha_lanzamiento: string;
+  num_jugadores: number;
+  descripcion?: string;
 }
 
 interface Tarifa {
-  id: number;
-  precioVenta: number;
-  precioRenta: number;
-  duracionRentaHoras: number;
+  ID: number;
+  PrecioVenta: number;
+  PrecioRenta: number;
+  DuracionRentaHoras: number;
 }
 
 interface Descuento {
-  id: number;
-  producto: string;
-  tipo: string;
-  valor: number;
-  fechaInicio: string;
-  fechaFin: string;
+  ID: number;
+  Tipo: string;
+  Valor: number;
+  FechaInicio: string;
+  FechaFin: string;
 }
 
 interface Producto {
@@ -45,88 +47,242 @@ export default function Inventario() {
   const [mostrarFormularioProducto, setMostrarFormularioProducto] = useState(false);
   const [mostrarFormularioTarifa, setMostrarFormularioTarifa] = useState(false);
   const [mostrarFormularioDescuento, setMostrarFormularioDescuento] = useState(false);
+  const [precioVenta, setPrecioVenta] = useState('');
+  const [precioRenta, setPrecioRenta] = useState('');
+  const [duracionRentaHoras, setDuracionRentaHoras] = useState('');
+  const [descuentos, setDescuentos] = useState<Descuento[]>([]);
+
+// Estados para el formulario de Creación
+const [tipoDescuento, setTipoDescuento] = useState('PORCENTAJE');
+const [valorDescuento, setValorDescuento] = useState('');
+const [fechaInicio, setFechaInicio] = useState('');
+const [fechaFin, setFechaFin] = useState('');
   
 
-  // Datos temporales únicamente para mostrar el Frontend.
-  // Backend reemplazará estos datos al conectar la API.
- const juegos: Juego[] = [
-  {
-    id: 1,
-    titulo: 'Minecraft',
-    clasificacion: 'E10+',
-    fechaLanzamiento: '2011-11-18',
-    numeroJugadores: 8,
-    edicion: 'Standard',
-    idioma: 'Español',
-  },
-  {
-    id: 2,
-    titulo: 'Grand Theft Auto V',
-    clasificacion: 'M',
-    fechaLanzamiento: '2013-09-17',
-    numeroJugadores: 30,
-    edicion: 'Premium',
-    idioma: 'Español',
-  },
-  {
-    id: 3,
-    titulo: 'EA Sports FC 26',
-    clasificacion: 'E',
-    fechaLanzamiento: '2025-09-26',
-    numeroJugadores: 22,
-    edicion: 'Standard',
-    idioma: 'Español',
-  },
-];
+//Peticion a la API para obtener los videojuegos
+const [juegos, setJuegos] = useState<Juego[]>([]);
+// Estados para el formulario de videojuego
+const [titulo, setTitulo] = useState('');
+const [edicion, setEdicion] = useState('');
+const [fechaLanzamiento, setFechaLanzamiento] = useState('');
+const [numeroJugadores, setNumeroJugadores] = useState('');
+const [plataformaId, setPlataformaId] = useState('1');
+const [clasificacionId, setClasificacionId] = useState('1');
+const [regionId, setRegionId] = useState('1');
+const [tarifaId, setTarifaId] = useState('1');
+const [descuentoID, setDescuentoID] = useState('');
+const guardarVideojuego = async () => {
+  try {
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/inv/crear-videojuegos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        Titulo: titulo,
+        Edicion: edicion,
+        Fecha_Lanzamiento: fechaLanzamiento,
+        numero_jugadores: Number(numeroJugadores),
+        Plataforma_id: Number(plataformaId),
+        Clasificacion_id: Number(clasificacionId),
+        Region_id: Number(regionId),
+        Tarifa_id: Number(tarifaId),
+      }),
+    });
 
- const tarifas: Tarifa[] = [
-  {
-    id: 1,
-    precioVenta: 450,
-    precioRenta: 45,
-    duracionRentaHoras: 24,
+    if (res.ok) {
+      setMostrarFormularioJuego(false);
+      cargarJuegos();
+    } else {
+      const errorData = await res.json();
+      console.error('Error desde Django:', errorData);
+    }
+  } catch (error) {
+    console.error('Error de red:', error);
+  }
+};
+// Función para obtener la lista desde la API
+const cargarJuegos = async () => {
+  try {
+    setCargando(true);
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/inv/videojuegos', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+    'ngrok-skip-browser-warning': 'true',
+    'Content-Type': 'application/json',
   },
-  {
-    id: 2,
-    precioVenta: 550,
-    precioRenta: 70,
-    duracionRentaHoras: 48,
-  },
-  {
-    id: 3,
-    precioVenta: 650,
-    precioRenta: 100,
-    duracionRentaHoras: 72,
-  },
-  ];
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setJuegos(data);
+    }
+  } catch (error) {
+    console.error("Error al cargar juegos:", error);
+  } finally {
+    setCargando(false);
+  }
+};
 
- const descuentos: Descuento[] = [
-  {
-    id: 1,
-    producto: 'MINE-PC-GT-001',
-    tipo: 'PORCENTAJE',
-    valor: 15,
-    fechaInicio: '2026-09-01',
-    fechaFin: '2026-09-15',
-  },
-  {
-    id: 2,
-    producto: 'GTAV-PC-GT-001',
-    tipo: 'PORCENTAJE',
-    valor: 20,
-    fechaInicio: '2026-09-05',
-    fechaFin: '2026-09-20',
-  },
-  {
-    id: 3,
-    producto: 'FC26-PC-GT-001',
-    tipo: 'MONTO',
-    valor: 50,
-    fechaInicio: '2026-09-10',
-    fechaFin: '2026-09-30',
-  },
-];
+useEffect(() => {
+  cargarJuegos();
+}, []);
 
+ const guardarTarifa = async () => {
+  try {
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/financiero/crear-tarifa', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        PrecioVenta: Number(precioVenta),
+        PrecioRenta: Number(precioRenta),
+        DuracionRentaHoras: Number(duracionRentaHoras),
+      }),
+    });
+
+    if (res.ok) {
+      // Limpia campos o cierra el modal si tienes un estado para ello
+      setPrecioVenta('');
+      setPrecioRenta('');
+      setDuracionRentaHoras('');
+      
+      // Vuelve a cargar las tarifas desde la API
+      cargarTarifas(); 
+    } else {
+      console.error('Error al guardar tarifa:', res.status, res.statusText);
+      const errorText = await res.text();
+      console.error('Detalle del error:', errorText);
+    }
+  } catch (error) {
+    console.error('Error de red al guardar tarifa:', error);
+  }
+};
+
+const [tarifas, setTarifas] = useState<Tarifa[]>([]);
+const [cargando, setCargando] = useState<boolean>(false);
+
+const cargarTarifas = async () => {
+  try {
+    setCargando(true);
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/info/tarifas', {
+      method: 'GET',
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (res.ok) {
+      const data: Tarifa[] = await res.json();
+      setTarifas(data);
+    } else {
+      console.error('Error al cargar tarifas:', res.status, res.statusText);
+    }
+  } catch (error) {
+    console.error('Error de red al obtener tarifas:', error);
+  } finally {
+    setCargando(false);
+  }
+};
+
+useEffect(() => {
+  cargarTarifas();
+}, []);
+
+//DESCUENTOS
+// 1. GET: Obtenemos los descuentos
+const cargarDescuentos = async () => {
+  try {
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/info/descuentos', {
+      method: 'GET',
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (res.ok) {
+      const data: Descuento[] = await res.json();
+      setDescuentos(data);
+    } else {
+      console.error('Error al cargar descuentos:', res.status);
+    }
+  } catch (error) {
+    console.error('Error de red al obtener descuentos:', error);
+  }
+};
+const crearDescuento = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/financiero/crear-descuento', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        Tipo: tipoDescuento,
+        Valor: Number(valorDescuento),
+        FechaInicio: new Date(fechaInicio).toISOString(),
+        FechaFin: new Date(fechaFin).toISOString(),
+      }),
+    });
+
+    if (res.ok) {
+      setValorDescuento('');
+      setFechaInicio('');
+      setFechaFin('');
+      cargarDescuentos();
+    } else {
+      console.error('Error al crear descuento:', res.status);
+    }
+  } catch (error) {
+    console.error('Error de red al crear descuento:', error);
+  }
+};
+
+// 3. POST: Asignar Descuento a un Videojuego
+const asignarDescuento = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const res = await fetch('https://sedation-scribe-state.ngrok-free.dev/financiero/asignar-descuento', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        VideojuegoID: Number(juegos[0]?.videojuego_id), // Aquí deberías reemplazar con el ID del videojuego seleccionado
+        DescuentoID: Number(descuentoID),
+      }),
+    });
+
+    if (res.ok) {
+      setJuegos([]); // Limpiar la lista de juegos para forzar la recarga
+      setDescuentoID('');
+      alert('Descuento asignado correctamente al videojuego');
+    } else {
+      console.error('Error al asignar descuento:', res.status);
+    }
+  } catch (error) {
+    console.error('Error de red al asignar descuento:', error);
+  }
+};
+
+useEffect(() => {
+  cargarDescuentos();
+}, []);
+//CUPONES
 const productos: Producto[] = [
   {
     id: 1,
@@ -354,15 +510,28 @@ const productos: Producto[] = [
         />
       </div>
 
-      {/* IDIOMA */}
+      {/* REGION */}
       <div>
         <label className="block text-sm text-slate-300 mb-2">
-          Idioma
+          Region
         </label>
 
         <input
           type="text"
-          placeholder="Ej. Español"
+          placeholder="Ej. Guatemala"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+        />
+      </div>
+
+      {/* PLATAFORMA */}
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">
+          Plataforma
+        </label>
+
+        <input
+          type="text"
+          placeholder="Ej. PlayStation 5"
           className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
         />
       </div>
@@ -391,12 +560,13 @@ const productos: Producto[] = [
         Cancelar
       </button>
 
-      <button
-        type="button"
-        className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
+     <button
+     type="button"
+    onClick={guardarVideojuego}
+     className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
       >
-        Guardar videojuego
-      </button>
+  Guardar videojuego
+</button>
 
     </div>
 
@@ -422,17 +592,17 @@ const productos: Producto[] = [
     </span>
 
     <p className="text-3xl font-bold text-lime-400 mt-2">
-      {new Set(juegos.map((juego) => juego.clasificacion)).size}
+      {new Set(juegos.map((juego) => juego.clasificacion_id)).size}
     </p>
   </div>
 
   <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
     <span className="text-xs uppercase font-semibold text-slate-400">
-      Idiomas registrados
+      Regiones registradas
     </span>
 
     <p className="text-3xl font-bold text-blue-400 mt-2">
-      {new Set(juegos.map((juego) => juego.idioma)).size}
+      {new Set(juegos.map((juego) => juego.region_id)).size}
     </p>
   </div>
 
@@ -450,34 +620,35 @@ const productos: Producto[] = [
         <th className="p-4">Lanzamiento</th>
         <th className="p-4">Jugadores</th>
         <th className="p-4">Edición</th>
-        <th className="p-4">Idioma</th>
+        <th className="p-4">Plataforma</th>
         <th className="p-4">Acciones</th>
+        <th className="p-4">Region</th>
       </tr>
     </thead>
 
     <tbody className="divide-y divide-slate-800">
 
-      {juegos.map((juego) => (
-        <tr key={juego.id} className="hover:bg-slate-800/30">
+      {juegos.map((juego, index) => (
+        <tr key={juego.videojuego_id || index} className="hover:bg-slate-800/30">
 
           <td className="p-4">
-            #{juego.id}
-          </td>
+            #{juego.videojuego_id}
+          </td> 
 
           <td className="p-4 font-medium text-white">
             {juego.titulo}
           </td>
 
           <td className="p-4">
-            {juego.clasificacion}
+            {juego.clasificacion_id}
           </td>
 
           <td className="p-4">
-            {juego.fechaLanzamiento}
+            {juego.fecha_lanzamiento}
           </td>
 
           <td className="p-4">
-            {juego.numeroJugadores}
+            {juego.num_jugadores}
           </td>
 
           <td className="p-4">
@@ -485,7 +656,10 @@ const productos: Producto[] = [
           </td>
 
           <td className="p-4">
-            {juego.idioma}
+            {juego.plataforma_id}
+          </td>
+          <td className="p-4">
+            {juego.region_id}
           </td>
 
           <td className="p-4 whitespace-nowrap">
@@ -806,6 +980,7 @@ const productos: Producto[] = [
 
       <button
         type="button"
+        onClick={guardarTarifa}
         className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
       >
         Guardar tarifa
@@ -820,18 +995,18 @@ const productos: Producto[] = [
 
   {tarifas.map((tarifa) => (
 
-    <div
-      key={tarifa.id}
+      <div
+      key={tarifa.ID}
       className="bg-slate-900 border border-slate-800 rounded-xl p-6"
     >
 
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-white">
-          Tarifa #{tarifa.id}
+          Tarifa #{tarifa.ID}
         </h3>
 
         <span className="text-xs text-slate-500">
-          {tarifa.duracionRentaHoras} horas
+          {tarifa.DuracionRentaHoras} horas
         </span>
       </div>
 
@@ -842,7 +1017,7 @@ const productos: Producto[] = [
         </p>
 
         <p className="text-2xl font-bold text-lime-400">
-          Q {tarifa.precioVenta.toFixed(2)}
+          Q {tarifa.PrecioVenta.toFixed(2)}
         </p>
 
       </div>
@@ -854,7 +1029,7 @@ const productos: Producto[] = [
         </p>
 
         <p className="text-xl font-bold text-purple-400">
-          Q {tarifa.precioRenta.toFixed(2)}
+          Q {tarifa.PrecioRenta.toFixed(2)}
         </p>
 
       </div>
@@ -866,7 +1041,7 @@ const productos: Producto[] = [
         </p>
 
         <p className="text-white">
-          {tarifa.duracionRentaHoras} horas
+          {tarifa.DuracionRentaHoras} horas
         </p>
 
       </div>
@@ -892,221 +1067,186 @@ const productos: Producto[] = [
           </div>
         )}
 
-        {/* ================= DESCUENTOS ================= */}
+{/* ================= DESCUENTOS ================= */}
+{seccion === 'descuentos' && (
+  <div className="space-y-6">
 
-        {seccion === 'descuentos' && (
-          <div className="space-y-6">
-
-            <div className="flex justify-between items-center">
-
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  Descuentos
-                </h2>
-
-                <p className="text-sm text-slate-400">
-                  Promociones y descuentos disponibles.
-                </p>
-              </div>
-
-              <button
-                onClick={() => setMostrarFormularioDescuento(true)}
-                className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold"
-              > 
-               + Agregar descuento
-              </button>
-
-            </div>
-            
-{mostrarFormularioDescuento && (
-  <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-
-    <div className="flex justify-between items-center mb-6">
+    <div className="flex justify-between items-center">
       <div>
-        <h3 className="text-xl font-bold text-white">
-          Agregar nuevo descuento
-        </h3>
-
+        <h2 className="text-xl font-bold text-white">
+          Descuentos
+        </h2>
         <p className="text-sm text-slate-400">
-          Asigna un descuento a un producto.
+          Promociones y descuentos disponibles.
         </p>
       </div>
 
       <button
-        onClick={() => setMostrarFormularioDescuento(false)}
-        className="text-slate-400 hover:text-white"
-      >
-        ✕
-      </button>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-      {/* PRODUCTO */}
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">
-          Producto
-        </label>
-
-        <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500">
-          <option>MINE-PC-GT-001</option>
-          <option>GTAV-PC-GT-001</option>
-          <option>FC26-PC-GT-001</option>
-        </select>
-      </div>
-
-      {/* TIPO */}
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">
-          Tipo de descuento
-        </label>
-
-        <select className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500">
-          <option>PORCENTAJE</option>
-          <option>MONTO</option>
-        </select>
-      </div>
-
-      {/* VALOR */}
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">
-          Valor
-        </label>
-
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="Ej. 15"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
-      </div>
-
-      {/* FECHA INICIO */}
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">
-          Fecha de inicio
-        </label>
-
-        <input
-          type="datetime-local"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
-      </div>
-
-      {/* FECHA FIN */}
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">
-          Fecha de finalización
-        </label>
-
-        <input
-          type="datetime-local"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
-        />
-      </div>
-
-    </div>
-
-    <div className="flex justify-end gap-3 mt-6">
-
-      <button
-        onClick={() => setMostrarFormularioDescuento(false)}
-        className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
-      >
-        Cancelar
-      </button>
-
-      <button
         type="button"
-        className="px-5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-sm font-semibold"
+        onClick={() => setMostrarFormularioDescuento(true)}
+        className="bg-purple-600 hover:bg-purple-700 px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
       >
-        Guardar descuento
+        + Agregar descuento
       </button>
+    </div>
 
+    {mostrarFormularioDescuento && (
+      /* El <form> sólo envuelve la tarjeta del formulario */
+      <form onSubmit={crearDescuento} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-xl font-bold text-white">
+              Agregar nuevo descuento
+            </h3>
+            <p className="text-sm text-slate-400">
+              Asigna un descuento a un producto.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMostrarFormularioDescuento(false)}
+            className="text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* TIPO */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Tipo de descuento
+            </label>
+            <select
+              value={tipoDescuento}
+              onChange={(e) => setTipoDescuento(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+            >
+              <option value="PORCENTAJE">PORCENTAJE</option>
+              <option value="MONTO">MONTO_FIJO</option>
+            </select>
+          </div>
+
+          {/* VALOR */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Valor
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={valorDescuento}
+              onChange={(e) => setValorDescuento(e.target.value)}
+              placeholder="Ej. 15"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+              required
+            />
+          </div>
+
+          {/* FECHA INICIO */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Fecha de inicio
+            </label>
+            <input
+              type="datetime-local"
+              value={fechaInicio}
+              onChange={(e) => setFechaInicio(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+              required
+            />
+          </div>
+
+          {/* FECHA FIN */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">
+              Fecha de finalización
+            </label>
+            <input
+              type="datetime-local"
+              value={fechaFin}
+              onChange={(e) => setFechaFin(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-purple-500"
+              required
+            />
+          </div>
+
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            type="button"
+            onClick={() => setMostrarFormularioDescuento(false)}
+            className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm text-white"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-sm transition-colors"
+          >
+            Guardar Descuento
+          </button>
+        </div>
+
+      </form> /* Cierre correcto del form */
+    )}
+
+    {/* TABLA DE DESCUENTOS */}
+    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
+      <table className="w-full text-left text-sm text-slate-300">
+        <thead className="bg-slate-800/60 text-slate-400 uppercase text-xs">
+          <tr>
+            <th className="p-4">ID</th>
+            <th className="p-4">Tipo</th>
+            <th className="p-4">Valor</th>
+            <th className="p-4">Fecha inicio</th>
+            <th className="p-4">Fecha fin</th>
+            <th className="p-4">Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-slate-800">
+          {descuentos.map((descuento, index) => (
+            <tr key={descuento.ID || index} className="hover:bg-slate-800/30">
+              <td className="p-4">#{descuento.ID}</td>
+              <td className="p-4">{descuento.Tipo}</td>
+              <td className="p-4 font-semibold text-lime-400">
+                {descuento.Tipo === 'PORCENTAJE'
+                  ? `${descuento.Valor}%`
+                  : `Q ${Number(descuento.Valor || 0).toFixed(2)}`}
+              </td>
+              <td className="p-4">
+                {descuento.FechaInicio ? new Date(descuento.FechaInicio).toLocaleDateString() : 'N/A'}
+              </td>
+              <td className="p-4">
+                {descuento.FechaFin ? new Date(descuento.FechaFin).toLocaleDateString() : 'N/A'}
+              </td>
+              <td className="p-4 whitespace-nowrap">
+                <button type="button" className="text-purple-400 hover:text-purple-300 mr-4">
+                  Editar
+                </button>
+                <button type="button" className="text-red-400 hover:text-red-300">
+                  Eliminar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
 
   </div>
 )}
 
-{/* TABLA DE DESCUENTOS */}
-<div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto">
-
-  <table className="w-full text-left text-sm text-slate-300">
-
-    <thead className="bg-slate-800/60 text-slate-400 uppercase text-xs">
-      <tr>
-        <th className="p-4">ID</th>
-        <th className="p-4">Producto</th>
-        <th className="p-4">Tipo</th>
-        <th className="p-4">Valor</th>
-        <th className="p-4">Fecha inicio</th>
-        <th className="p-4">Fecha fin</th>
-        <th className="p-4">Acciones</th>
-      </tr>
-    </thead>
-
-    <tbody className="divide-y divide-slate-800">
-
-      {descuentos.map((descuento) => (
-
-        <tr
-          key={descuento.id}
-          className="hover:bg-slate-800/30"
-        >
-
-          <td className="p-4">
-            #{descuento.id}
-          </td>
-
-          <td className="p-4 font-mono text-purple-400">
-            {descuento.producto}
-          </td>
-
-          <td className="p-4">
-            {descuento.tipo}
-          </td>
-
-          <td className="p-4 font-semibold text-lime-400">
-            {descuento.tipo === 'PORCENTAJE'
-              ? `${descuento.valor}%`
-              : `Q ${descuento.valor.toFixed(2)}`}
-          </td>
-
-          <td className="p-4">
-            {descuento.fechaInicio}
-          </td>
-
-          <td className="p-4">
-            {descuento.fechaFin}
-          </td>
-
-          <td className="p-4 whitespace-nowrap">
-
-            <button className="text-purple-400 hover:text-purple-300 mr-4">
-              Editar
-            </button>
-
-            <button className="text-red-400 hover:text-red-300">
-              Eliminar
-            </button>
-
-          </td>
-
-        </tr>
-
-      ))}
-
-    </tbody>
-
-  </table>
-
-</div>
-          </div>
-        )}
-
       </main>
 
     </div>
+    
   );
 }
