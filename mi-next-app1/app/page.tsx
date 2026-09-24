@@ -11,7 +11,7 @@ export interface Producto {
   titulo: string;
   descripcion: string;
   precio: number;
-  descuento: number; // Porcentaje o valor de descuento devuelto por la API
+  descuento: number;
   imagen: string;
   portada_url: string;
   genero_nombre: string;
@@ -42,7 +42,7 @@ export default function Home() {
   // Estado para el usuario autenticado
   const [usuarioActual, setUsuarioActual] = useState<any>(null);
 
-  // 1. Cargar productos de la API
+  // 1. Cargar productos de la API evitando duplicados
   useEffect(() => {
     const fetchProductos = async () => {
       try {
@@ -53,7 +53,7 @@ export default function Home() {
           method: "GET",
           headers: {
             "Accept": "application/json",
-            "ngrok-skip-browser-warning": "true",
+            "ngrok-skip-browser-warning": "69420",
           },
         });
 
@@ -64,20 +64,18 @@ export default function Home() {
         const data = await response.json();
         const items = Array.isArray(data) ? data : data.data || [];
 
+        // Usamos un Map para garantizar que cada título de juego sea único
         const mapaJuegos = new Map<string, Producto>();
 
         items.forEach((item: any, idx: number) => {
-          if (!item.genero_nombre && !item.desarrolladora_nombre) {
-            return;
-          }
-
-          const tituloVal = (item.titulo || "Sin título").trim();
+          const tituloVal = String(item.titulo || item.nombre || "Sin título").trim();
           const claveUnica = tituloVal.toLowerCase();
 
+          // Si el juego ya existe en el mapa, podemos omitirlo o conservar el primero
           if (!mapaJuegos.has(claveUnica)) {
             const idJuego = Number(item.id ?? idx + 1);
 
-            const imagenRaw = item.portada_url || "";
+            const imagenRaw = item.portada_url || item.imagen || "";
             const imagenVal =
               imagenRaw &&
               !imagenRaw.includes("cdn.ejemplo.com") &&
@@ -85,7 +83,6 @@ export default function Home() {
                 ? imagenRaw
                 : "https://placehold.co/400x300?text=Sin+Portada";
 
-            // Tomamos el precio y descuento directamente de la API
             const precioParsed = parseFloat(item.precio_venta ?? item.precio);
             const precioFinal = !isNaN(precioParsed) ? precioParsed : 0;
 
@@ -94,21 +91,17 @@ export default function Home() {
 
             mapaJuegos.set(claveUnica, {
               id: idJuego,
-              nombre: String(tituloVal),
-              titulo: String(tituloVal),
+              nombre: tituloVal,
+              titulo: tituloVal,
               descripcion: String(item.descripcion || ""),
               precio: precioFinal,
               descuento: descuentoFinal,
-              imagen: String(imagenVal),
-              portada_url: String(imagenVal),
+              imagen: imagenVal,
+              portada_url: imagenVal,
               genero_nombre: String(item.genero_nombre || "General"),
-              desarrolladora_nombre: String(
-                item.desarrolladora_nombre || "Independiente"
-              ),
+              desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
               edicion: String(item.edicion || "Estándar"),
-              clasificacion_nombre: String(
-                item.clasificacion_nombre || "General"
-              ),
+              clasificacion_nombre: String(item.clasificacion_nombre || "General"),
               numero_jugadores: Number(item.num_jugadores ?? item.numero_jugadores ?? 1),
               fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
               plataforma_nombre: String(item.plataforma_nombre || "PC"),
@@ -117,8 +110,7 @@ export default function Home() {
           }
         });
 
-        const productosLimpios: Producto[] = Array.from(mapaJuegos.values());
-        setProductos(productosLimpios);
+        setProductos(Array.from(mapaJuegos.values()));
       } catch (err: any) {
         console.error("Error al conectar directamente con la API:", err);
         setError(
@@ -192,9 +184,13 @@ export default function Home() {
     setCarrito((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Suma directa de los precios mandados por la API
   const total = carrito.reduce(
-    (suma, producto) => suma + producto.precio,
+    (suma, producto) => {
+      const precioItem = producto.descuento > 0
+        ? producto.precio * (1 - producto.descuento / 100)
+        : producto.precio;
+      return suma + precioItem;
+    },
     0
   );
 
@@ -206,12 +202,14 @@ export default function Home() {
     const descripcion = (producto.descripcion || "").toLowerCase();
     const genero = (producto.genero_nombre || "").toLowerCase();
     const plataforma = (producto.plataforma_nombre || "").toLowerCase();
+    const desarrolladora = (producto.desarrolladora_nombre || "").toLowerCase();
 
     return (
       titulo.includes(query) ||
       descripcion.includes(query) ||
       genero.includes(query) ||
-      plataforma.includes(query)
+      plataforma.includes(query) ||
+      desarrolladora.includes(query)
     );
   });
 
@@ -333,7 +331,6 @@ export default function Home() {
               )}
             </button>
 
-            {/* Renderizado condicional del usuario y sesión */}
             {mounted && usuarioActual ? (
               <div className="flex items-center gap-3 pl-2 border-l border-purple-900/40">
                 <div className="text-right hidden sm:block">
@@ -470,7 +467,6 @@ export default function Home() {
         {!loading && !error && productosFiltrados.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {productosFiltrados.map((producto) => {
-              // Verificamos si tiene descuento aplicado según la API
               const tieneDescuento = producto.descuento > 0;
               const precioOriginal = producto.precio;
               const precioConDescuento = tieneDescuento
@@ -502,7 +498,6 @@ export default function Home() {
                         </span>
                       </div>
 
-                      {/* Etiqueta flotante de descuento si existe */}
                       {tieneDescuento && (
                         <div className="absolute right-3 top-3 rounded-md bg-red-600 px-2.5 py-1 text-xs font-black text-white shadow-lg">
                           -{producto.descuento}%
