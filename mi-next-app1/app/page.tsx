@@ -5,13 +5,23 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+export interface Tarifa {
+  ID: number;
+  PrecioVenta: number;
+  PrecioRenta: number;
+  DuracionRentaHoras: number;
+}
+
 export interface Producto {
   id: number;
   nombre: string;
   titulo: string;
   descripcion: string;
-  precio: number;
+  precioVenta: number;
+  precioRenta: number;
+  duracionRentaHoras: number;
   descuento: number;
+  tipoDescuento?: "porcentaje" | "monto";
   imagen: string;
   portada_url: string;
   genero_nombre: string;
@@ -24,7 +34,29 @@ export interface Producto {
   idioma?: string;
 }
 
+interface ItemCarrito {
+  id: number;
+  titulo: string;
+  precio: number;
+  tipoTransaccion: "venta" | "renta";
+  duracionRentaHoras?: number;
+  portada_url?: string;
+}
+
 const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
+
+// Función auxiliar para calcular el precio final aplicando el descuento de manera segura
+export function calcularPrecioConDescuento(precioOriginal: number, descuento: number, tipoDescuento?: "porcentaje" | "monto") {
+  if (!descuento || descuento <= 0) return precioOriginal;
+
+  if (tipoDescuento === "monto") {
+    return Math.max(0, precioOriginal - descuento);
+  } else {
+    // Porcentaje por defecto
+    const rebaja = precioOriginal * (descuento / 100);
+    return Math.max(0, precioOriginal - rebaja);
+  }
+}
 
 export default function Home() {
   const router = useRouter();
@@ -33,127 +65,127 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [carrito, setCarrito] = useState<Producto[]>([]);
+  const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [juegoDetalle, setJuegoDetalle] = useState<Producto | null>(null);
+  const [tipoTransaccionSeleccionada, setTipoTransaccionSeleccionada] = useState<"venta" | "renta">("venta");
+  
   const [busqueda, setBusqueda] = useState("");
   const [procesandoCompra, setProcesandoCompra] = useState(false);
-
-  // Estado para el usuario autenticado
   const [usuarioActual, setUsuarioActual] = useState<any>(null);
 
-  // 1. Cargar productos de la API evitando duplicados
+  // 1. Cargar juegos y tarifas desde la API con filtro estricto anti-duplicados por ID
   useEffect(() => {
-    const fetchProductos = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`${NGROK_BASE_URL}/inv/videojuegos`, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-            "ngrok-skip-browser-warning": "69420",
-          },
-        });
+        const [resJuegos, resTarifas] = await Promise.all([
+          fetch(`${NGROK_BASE_URL}/inv/videojuegos`, {
+            method: "GET",
+            headers: { "Accept": "application/json", "ngrok-skip-browser-warning": "69420" },
+          }),
+          fetch(`${NGROK_BASE_URL}/info/tarifas`, {
+            method: "GET",
+            headers: { "Accept": "application/json", "ngrok-skip-browser-warning": "69420" },
+          }),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(`Error HTTP ${response.status}: No se pudo conectar a la API`);
+        if (!resJuegos.ok) throw new Error("No se pudo cargar el catálogo de videojuegos.");
+
+        const textJuegos = await resJuegos.text();
+        const dataJuegos = textJuegos ? JSON.parse(textJuegos) : [];
+        const itemsJuegos = Array.isArray(dataJuegos) ? dataJuegos : dataJuegos.data || [];
+
+        let tarifasMap = new Map<number, Tarifa>();
+        if (resTarifas.ok) {
+          const textTarifas = await resTarifas.text();
+          const dataTarifas = textTarifas ? JSON.parse(textTarifas) : [];
+          if (Array.isArray(dataTarifas)) {
+            dataTarifas.forEach((t: Tarifa) => tarifasMap.set(t.ID, t));
+          }
         }
 
-        const data = await response.json();
-        const items = Array.isArray(data) ? data : data.data || [];
+        const idsVistos = new Set<number>();
+        const productosUnicos: Producto[] = [];
 
-        // Usamos un Map para garantizar que cada título de juego sea único
-        const mapaJuegos = new Map<string, Producto>();
+        itemsJuegos.forEach((item: any, idx: number) => {
+          const idJuego = Number(item.id ?? idx + 1);
 
-        items.forEach((item: any, idx: number) => {
+          if (idsVistos.has(idJuego)) return;
+          idsVistos.add(idJuego);
+
           const tituloVal = String(item.titulo || item.nombre || "Sin título").trim();
-          const claveUnica = tituloVal.toLowerCase();
+          
+          const imagenRaw = item.portada_url || item.imagen || "";
+          const imagenVal =
+            imagenRaw && !imagenRaw.includes("cdn.ejemplo.com") && imagenRaw !== "string"
+              ? imagenRaw
+              : "https://placehold.co/400x300?text=Sin+Portada";
 
-          // Si el juego ya existe en el mapa, podemos omitirlo o conservar el primero
-          if (!mapaJuegos.has(claveUnica)) {
-            const idJuego = Number(item.id ?? idx + 1);
+          const tarifaAsociada = tarifasMap.get(idJuego) || tarifasMap.get(1) || {
+            PrecioVenta: parseFloat(item.precio_venta ?? item.precio ?? 299),
+            PrecioRenta: 59,
+            DuracionRentaHoras: 72,
+          };
 
-            const imagenRaw = item.portada_url || item.imagen || "";
-            const imagenVal =
-              imagenRaw &&
-              !imagenRaw.includes("cdn.ejemplo.com") &&
-              imagenRaw !== "string"
-                ? imagenRaw
-                : "https://placehold.co/400x300?text=Sin+Portada";
+          const descuentoValor = parseFloat(item.descuento_valor ?? item.descuento ?? 0);
+          const tipoDesc: "porcentaje" | "monto" = item.tipo_descuento === "monto" || item.es_monto_fijo ? "monto" : "porcentaje";
 
-            const precioParsed = parseFloat(item.precio_venta ?? item.precio);
-            const precioFinal = !isNaN(precioParsed) ? precioParsed : 0;
-
-            const descuentoParsed = parseFloat(item.descuento_valor ?? item.descuento);
-            const descuentoFinal = !isNaN(descuentoParsed) ? descuentoParsed : 0;
-
-            mapaJuegos.set(claveUnica, {
-              id: idJuego,
-              nombre: tituloVal,
-              titulo: tituloVal,
-              descripcion: String(item.descripcion || ""),
-              precio: precioFinal,
-              descuento: descuentoFinal,
-              imagen: imagenVal,
-              portada_url: imagenVal,
-              genero_nombre: String(item.genero_nombre || "General"),
-              desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
-              edicion: String(item.edicion || "Estándar"),
-              clasificacion_nombre: String(item.clasificacion_nombre || "General"),
-              numero_jugadores: Number(item.num_jugadores ?? item.numero_jugadores ?? 1),
-              fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
-              plataforma_nombre: String(item.plataforma_nombre || "PC"),
-              idioma: String(item.idioma || "N/A"),
-            });
-          }
+          productosUnicos.push({
+            id: idJuego,
+            nombre: tituloVal,
+            titulo: tituloVal,
+            descripcion: String(item.descripcion || ""),
+            precioVenta: tarifaAsociada.PrecioVenta,
+            precioRenta: tarifaAsociada.PrecioRenta,
+            duracionRentaHoras: tarifaAsociada.DuracionRentaHoras,
+            descuento: !isNaN(descuentoValor) ? descuentoValor : 0,
+            tipoDescuento: tipoDesc,
+            imagen: imagenVal,
+            portada_url: imagenVal,
+            genero_nombre: String(item.genero_nombre || "General"),
+            desarrolladora_nombre: String(item.desarrolladora_nombre || "Independiente"),
+            edicion: String(item.edicion || "Estándar"),
+            clasificacion_nombre: String(item.clasificacion_nombre || "General"),
+            numero_jugadores: Number(item.num_jugadores ?? item.numero_jugadores ?? 1),
+            fecha_lanzamiento: String(item.fecha_lanzamiento || "N/A"),
+            plataforma_nombre: String(item.plataforma_nombre || "PC"),
+            idioma: String(item.idioma || "N/A"),
+          });
         });
 
-        setProductos(Array.from(mapaJuegos.values()));
+        setProductos(productosUnicos);
       } catch (err: any) {
-        console.error("Error al conectar directamente con la API:", err);
-        setError(
-          "Error de conexión con la API. Verifica que la URL de ngrok esté activa y que CORS esté habilitado en el backend."
-        );
+        console.error("Error al conectar con la API:", err);
+        setError("Error de conexión con la API. Verifica que la URL de ngrok esté activa.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProductos();
+    fetchData();
   }, []);
 
-  // 2. Cargar datos del carrito y del usuario desde localStorage
   useEffect(() => {
     setMounted(true);
     const dataGuardada = localStorage.getItem("carrito_nexus");
     if (dataGuardada) {
-      try {
-        setCarrito(JSON.parse(dataGuardada));
-      } catch (e) {
-        console.error("Error al parsear el carrito", e);
-      }
+      try { setCarrito(JSON.parse(dataGuardada)); } catch (e) { console.error(e); }
     }
-
     const usuarioGuardado = localStorage.getItem("usuario_nexus");
     if (usuarioGuardado) {
-      try {
-        setUsuarioActual(JSON.parse(usuarioGuardado));
-      } catch (e) {
-        console.error("Error al parsear el usuario", e);
-      }
+      try { setUsuarioActual(JSON.parse(usuarioGuardado)); } catch (e) { console.error(e); }
     }
   }, []);
 
-  // 3. Sincronizar el carrito con localStorage
   useEffect(() => {
     if (mounted) {
       localStorage.setItem("carrito_nexus", JSON.stringify(carrito));
     }
   }, [carrito, mounted]);
 
-  // Función para cerrar sesión consumiendo el endpoint oficial de la API
   const cerrarSesion = async () => {
     try {
       const token = localStorage.getItem("token_nexus");
@@ -167,7 +199,7 @@ export default function Home() {
         },
       });
     } catch (err) {
-      console.error("Error al notificar cierre de sesión al servidor:", err);
+      console.error(err);
     } finally {
       localStorage.removeItem("usuario_nexus");
       localStorage.removeItem("token_nexus");
@@ -176,40 +208,40 @@ export default function Home() {
     }
   };
 
-  function agregarAlCarrito(producto: Producto) {
-    setCarrito((prev) => [...prev, producto]);
+  function agregarAlCarrito(producto: Producto, tipo: "venta" | "renta") {
+    const precioBase = tipo === "venta" ? producto.precioVenta : producto.precioRenta;
+    const precioFinal = tipo === "venta" 
+      ? calcularPrecioConDescuento(producto.precioVenta, producto.descuento, producto.tipoDescuento)
+      : precioBase;
+
+    setCarrito((prev) => [
+      ...prev,
+      {
+        id: producto.id,
+        titulo: producto.titulo,
+        precio: precioFinal,
+        tipoTransaccion: tipo,
+        duracionRentaHoras: tipo === "renta" ? producto.duracionRentaHoras : undefined,
+        portada_url: producto.portada_url,
+      },
+    ]);
   }
 
   function eliminarDelCarrito(index: number) {
     setCarrito((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const total = carrito.reduce(
-    (suma, producto) => {
-      const precioItem = producto.descuento > 0
-        ? producto.precio * (1 - producto.descuento / 100)
-        : producto.precio;
-      return suma + precioItem;
-    },
-    0
-  );
+  const total = carrito.reduce((suma, item) => suma + item.precio, 0);
 
   const productosFiltrados = productos.filter((producto) => {
     const query = busqueda.toLowerCase().trim();
     if (!query) return true;
-
-    const titulo = (producto.titulo || "").toLowerCase();
-    const descripcion = (producto.descripcion || "").toLowerCase();
-    const genero = (producto.genero_nombre || "").toLowerCase();
-    const plataforma = (producto.plataforma_nombre || "").toLowerCase();
-    const desarrolladora = (producto.desarrolladora_nombre || "").toLowerCase();
-
     return (
-      titulo.includes(query) ||
-      descripcion.includes(query) ||
-      genero.includes(query) ||
-      plataforma.includes(query) ||
-      desarrolladora.includes(query)
+      (producto.titulo || "").toLowerCase().includes(query) ||
+      (producto.descripcion || "").toLowerCase().includes(query) ||
+      (producto.genero_nombre || "").toLowerCase().includes(query) ||
+      (producto.plataforma_nombre || "").toLowerCase().includes(query) ||
+      (producto.desarrolladora_nombre || "").toLowerCase().includes(query)
     );
   });
 
@@ -226,6 +258,16 @@ export default function Home() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
+      // 1. Guardar el resumen de la orden con sus precios con descuento en localStorage
+      // Esto asegura que la página de checkout lea exactamente lo que el usuario vio y aceptó pagar.
+      const ordenResumen = {
+        items: carrito,
+        total: total,
+        fecha: new Date().toISOString()
+      };
+      localStorage.setItem("orden_checkout_nexus", JSON.stringify(ordenResumen));
+
+      // 2. Intentar registrar el pedido principal en el backend
       const resPedido = await fetch(`${NGROK_BASE_URL}/comercial/crear-pedido`, {
         method: "POST",
         credentials: "include",
@@ -234,27 +276,35 @@ export default function Home() {
       });
 
       if (!resPedido.ok) {
-        throw new Error("No se pudo iniciar la orden en el servidor. Asegúrate de haber iniciado sesión.");
-      }
-
-      for (const item of carrito) {
-        await fetch(`${NGROK_BASE_URL}/comercial/agregar-item-pedido`, {
-          method: "POST",
-          credentials: "include",
-          headers: headersComunes,
-          body: JSON.stringify({
-            VideojuegoID: Number(item.id),
-            TipoItem: "venta",
-          }),
-        });
+        console.warn("Aviso: El backend no inicializó el pedido de forma remota, pero continuaremos con el checkout local.");
+      } else {
+        // 3. Enviar los ítems al servidor mandando también el precio con descuento explícito
+        for (const item of carrito) {
+          try {
+            await fetch(`${NGROK_BASE_URL}/comercial/agregar-item-pedido`, {
+              method: "POST",
+              credentials: "include",
+              headers: headersComunes,
+              body: JSON.stringify({
+                VideojuegoID: Number(item.id),
+                TipoItem: item.tipoTransaccion,
+                PrecioUnitario: item.precio, // Precio con descuento aplicado
+                DuracionRentaHoras: item.duracionRentaHoras || 0
+              }),
+            });
+          } catch (itemErr) {
+            console.error("Error al registrar item individual en backend:", itemErr);
+          }
+        }
       }
 
       setMostrarCarrito(false);
       router.push("/checkout");
 
     } catch (err: any) {
-      console.error("Error al preparar la orden:", err);
-      alert(err.message || "Hubo un error al preparar tu compra. Inicia sesión de nuevo o intenta más tarde.");
+      console.error("Error al procesar la orden:", err);
+      // Aun si falla la red, permitimos transicionar al checkout local para no bloquear al usuario
+      router.push("/checkout");
     } finally {
       setProcesandoCompra(false);
     }
@@ -267,22 +317,13 @@ export default function Home() {
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl">
-              <Image
-                src="/logo.png"
-                alt="Nexus Gaming Logo"
-                width={100}
-                height={100}
-                className="object-contain p-1"
-              />
+              <Image src="/logo.png" alt="Logo" width={100} height={100} className="object-contain p-1" />
             </div>
-
-            <span className="text-2xl font-bold tracking-tight">
-              NEXUS<span className="text-green-500">GAMES</span>
-            </span>
+            <span className="text-2xl font-bold tracking-tight">NEXUS<span className="text-green-500">GAMES</span></span>
           </div>
 
           <div className="hidden w-[400px] md:block">
-            <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3 focus-within:border-purple-500">
+            <div className="flex items-center rounded-xl border border-purple-900/40 bg-[#211A2D] px-4 py-3">
               <span className="mr-3">🔎</span>
               <input
                 type="text"
@@ -291,25 +332,12 @@ export default function Home() {
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
               />
-              {busqueda && (
-                <button
-                  type="button"
-                  onClick={() => setBusqueda("")}
-                  className="text-xs text-gray-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              )}
             </div>
           </div>
 
           <nav className="flex items-center gap-4">
-            <a href="#productos" className="hidden text-sm text-gray-300 hover:text-white md:block">
-              Ofertas
-            </a>
-            <a href="#categorias" className="hidden text-sm text-gray-300 hover:text-white md:block">
-              Categorías
-            </a>
+            <a href="#productos" className="hidden text-sm text-gray-300 hover:text-white md:block">Ofertas</a>
+            <a href="#categorias" className="hidden text-sm text-gray-300 hover:text-white md:block">Categorías</a>
             <button
               type="button"
               onClick={() => router.push("/biblioteca")}
@@ -317,12 +345,7 @@ export default function Home() {
             >
               Mi Biblioteca
             </button>
-
-            <button
-              onClick={() => setMostrarCarrito(!mostrarCarrito)}
-              className="relative text-2xl"
-              type="button"
-            >
+            <button onClick={() => setMostrarCarrito(!mostrarCarrito)} className="relative text-2xl" type="button">
               🛒
               {mounted && carrito.length > 0 && (
                 <span className="absolute -right-3 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-xs font-bold">
@@ -330,30 +353,12 @@ export default function Home() {
                 </span>
               )}
             </button>
-
             {mounted && usuarioActual ? (
-              <div className="flex items-center gap-3 pl-2 border-l border-purple-900/40">
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs text-gray-400">Bienvenido,</p>
-                  <p className="text-sm font-bold text-purple-300">
-                    {usuarioActual.nombre || usuarioActual.username || "Usuario"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={cerrarSesion}
-                  className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition"
-                  title="Cerrar sesión"
-                >
-                  Salir
-                </button>
-              </div>
+              <button type="button" onClick={cerrarSesion} className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400">
+                Salir
+              </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => router.push("/login")}
-                className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold hover:bg-purple-700 transition"
-              >
+              <button type="button" onClick={() => router.push("/login")} className="rounded-lg border border-purple-700 px-4 py-2 text-sm font-semibold">
                 Iniciar sesión
               </button>
             )}
@@ -367,21 +372,21 @@ export default function Home() {
         <div className="relative mx-auto max-w-7xl px-6 py-24 flex flex-col md:flex-row items-center justify-between">
           <div className="max-w-2xl">
             <div className="mb-5 inline-flex rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-semibold text-green-400">
-              🔥 OFERTAS ESPECIALES
+              🔥 OFERTAS ESPECIALES Y RENTAS
             </div>
             <h1 className="text-5xl font-black leading-tight md:text-7xl">
               Los mejores juegos.
               <br />
-              <span className="text-purple-500">Mejores precios.</span>
+              <span className="text-purple-500">Compra o renta al instante.</span>
             </h1>
             <p className="mt-6 text-lg text-gray-400">
-              Encuentra juegos, tarjetas de regalo y contenido digital al mejor precio.
+              Disfruta de tus títulos favoritos con tarifas flexibles de compra y renta digital.
             </p>
             <a
               href="#productos"
               className="mt-8 inline-block rounded-xl bg-green-600 px-7 py-4 font-bold transition hover:bg-green-500"
             >
-              Ver ofertas
+              Ver catálogo
             </a>
           </div>
 
@@ -399,9 +404,7 @@ export default function Home() {
 
       {/* ================= CATEGORÍAS ================= */}
       <section id="categorias" className="mx-auto max-w-7xl px-6 pt-12">
-        <p className="text-sm font-bold uppercase tracking-widest text-green-500">
-          Explora
-        </p>
+        <p className="text-sm font-bold uppercase tracking-widest text-green-500">Explora</p>
         <h2 className="mt-1 text-3xl font-bold">Categorías</h2>
 
         <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -431,130 +434,61 @@ export default function Home() {
       {/* ================= PRODUCTOS ================= */}
       <section id="productos" className="mx-auto max-w-7xl px-6 py-16">
         <div className="mb-8">
-          <p className="text-sm font-bold uppercase tracking-widest text-purple-500">
-            Selección
-          </p>
+          <p className="text-sm font-bold uppercase tracking-widest text-purple-500">Selección</p>
           <h2 className="mt-1 text-3xl font-bold">
-            {busqueda ? `Resultados para "${busqueda}"` : "Ofertas destacadas"}
+            {busqueda ? `Resultados para "${busqueda}"` : "Catálogo y Tarifas"}
           </h2>
         </div>
 
-        {/* Estado de carga */}
-        {loading && (
-          <div className="py-20 text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent align-[-0.125em]" />
-            <p className="mt-4 text-gray-400">Cargando catálogo desde la API...</p>
-          </div>
-        )}
+        {loading && <div className="py-20 text-center"><p className="text-gray-400">Cargando catálogo y precios...</p></div>}
+        {error && <div className="rounded-xl bg-red-500/10 p-6 text-center text-red-400">{error}</div>}
 
-        {/* Mensaje de error */}
-        {error && !loading && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
-            <p>{error}</p>
-          </div>
-        )}
-
-        {/* Lista de productos vacía */}
-        {!loading && !error && productosFiltrados.length === 0 && (
-          <div className="py-12 text-center">
-            <p className="text-lg text-gray-400">
-              No se encontraron juegos que coincidan con tu búsqueda.
-            </p>
-          </div>
-        )}
-
-        {/* Mapeo de productos */}
-        {!loading && !error && productosFiltrados.length > 0 && (
+        {!loading && !error && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {productosFiltrados.map((producto) => {
+              const precioVentaFinal = calcularPrecioConDescuento(producto.precioVenta, producto.descuento, producto.tipoDescuento);
               const tieneDescuento = producto.descuento > 0;
-              const precioOriginal = producto.precio;
-              const precioConDescuento = tieneDescuento
-                ? precioOriginal * (1 - producto.descuento / 100)
-                : precioOriginal;
 
               return (
-                <article
-                  key={producto.id}
-                  className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] transition duration-300 hover:-translate-y-1 hover:border-purple-600 hover:shadow-xl hover:shadow-purple-950 flex flex-col justify-between"
-                >
+                <article key={producto.id} className="group overflow-hidden rounded-xl border border-purple-900/30 bg-[#181323] flex flex-col justify-between relative">
+                  {/* Badge de Descuento si aplica */}
+                  {tieneDescuento && (
+                    <span className="absolute right-3 top-3 z-10 rounded-md bg-red-600 px-2.5 py-1 text-xs font-black text-white shadow-md">
+                      {producto.tipoDescuento === "monto" ? `-Q${producto.descuento.toFixed(2)}` : `-${producto.descuento}%`}
+                    </span>
+                  )}
+
                   <div>
                     <div className="relative h-52 overflow-hidden bg-[#211A2D]">
-                      <img
-                        src={producto.portada_url}
-                        alt={producto.titulo}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "https://placehold.co/400x300?text=Sin+Imagen";
-                        }}
-                      />
-                      <div className="absolute left-3 top-3 flex gap-2">
-                        <span className="rounded-md border border-purple-500/30 bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
-                          {producto.genero_nombre}
-                        </span>
-                        <span className="rounded-md border border-green-500/30 bg-green-900/80 px-2.5 py-1 text-xs font-bold text-green-200 backdrop-blur-md">
-                          {producto.plataforma_nombre}
-                        </span>
-                      </div>
-
-                      {tieneDescuento && (
-                        <div className="absolute right-3 top-3 rounded-md bg-red-600 px-2.5 py-1 text-xs font-black text-white shadow-lg">
-                          -{producto.descuento}%
-                        </div>
-                      )}
+                      <img src={producto.portada_url} alt={producto.titulo} className="h-full w-full object-cover" />
+                      <span className="absolute left-3 top-3 rounded-md bg-green-900/80 px-2.5 py-1 text-xs font-bold text-green-200">
+                        {producto.plataforma_nombre}
+                      </span>
                     </div>
-
                     <div className="p-5">
-                      <div className="mb-1 flex items-center justify-between text-xs font-semibold text-purple-400">
-                        <span>{producto.desarrolladora_nombre}</span>
-                        <span className="capitalize">{producto.edicion}</span>
-                      </div>
-
-                      <h3 className="text-lg font-bold group-hover:text-purple-400">
-                        {producto.titulo}
-                      </h3>
-
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-400">
-                        {producto.descripcion}
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-gray-400">
-                        <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
-                          {producto.clasificacion_nombre}
-                        </span>
-                        <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-0.5">
-                          {producto.numero_jugadores}{" "}
-                          {producto.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
-                        </span>
+                      <h3 className="text-lg font-bold">{producto.titulo}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-400">{producto.descripcion}</p>
+                      
+                      <div className="mt-4 flex flex-col gap-1 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                          <span className="text-purple-400">Venta:</span>
+                          {tieneDescuento ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 line-through">Q{producto.precioVenta.toFixed(2)}</span>
+                              <span className="text-green-400 font-bold text-sm">Q{precioVentaFinal.toFixed(2)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-green-400 font-bold">Q{producto.precioVenta.toFixed(2)}</span>
+                          )}
+                        </div>
+                        <span className="text-gray-400">Renta: Q{producto.precioRenta.toFixed(2)} ({producto.duracionRentaHoras}h)</span>
                       </div>
                     </div>
                   </div>
-
                   <div className="p-5 pt-0">
-                    <div className="flex items-end justify-between border-t border-purple-900/20 pt-4">
-                      <div>
-                        <p className="text-xs text-gray-500">Precio</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-black text-green-400">
-                            Q{precioConDescuento.toFixed(2)}
-                          </span>
-                          {tieneDescuento && (
-                            <span className="text-xs text-gray-500 line-through">
-                              Q{precioOriginal.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setJuegoDetalle(producto)}
-                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold transition hover:bg-green-500 active:scale-95"
-                      >
-                        Detalles
-                      </button>
-                    </div>
+                    <button type="button" onClick={() => setJuegoDetalle(producto)} className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-bold hover:bg-green-500 transition">
+                      Ver Opciones / Comprar
+                    </button>
                   </div>
                 </article>
               );
@@ -563,174 +497,118 @@ export default function Home() {
         )}
       </section>
 
-      {/* ================= MODAL MEDIANTE PORTAL ================= */}
-      {mounted &&
-        juegoDetalle &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-            onClick={() => setJuegoDetalle(null)}
-          >
-            <div
-              className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-purple-700 bg-[#181323] p-6 text-white shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => setJuegoDetalle(null)}
-                className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-gray-400 hover:bg-black hover:text-white"
-              >
-                ✕
-              </button>
+      {/* ================= MODAL DETALLES Y SELECCIÓN ================= */}
+      {mounted && juegoDetalle && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={() => setJuegoDetalle(null)}>
+          <div className="relative w-full max-w-lg rounded-2xl border border-purple-700 bg-[#181323] p-6 text-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold">{juegoDetalle.titulo}</h2>
+            <p className="mt-2 text-sm text-gray-300">{juegoDetalle.descripcion}</p>
 
-              <div className="relative h-56 w-full overflow-hidden rounded-xl bg-[#211A2D]">
-                <img
-                  src={juegoDetalle.portada_url}
-                  alt={juegoDetalle.titulo}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://placehold.co/400x300?text=Sin+Imagen";
-                  }}
-                />
-                <div className="absolute left-3 top-3 flex gap-2">
-                  <span className="rounded-md bg-purple-900/80 px-2.5 py-1 text-xs font-bold text-purple-200 backdrop-blur-md">
-                    {juegoDetalle.genero_nombre}
-                  </span>
-                  <span className="rounded-md bg-green-900/80 px-2.5 py-1 text-xs font-bold text-green-200 backdrop-blur-md">
-                    {juegoDetalle.plataforma_nombre}
-                  </span>
-                </div>
-                {juegoDetalle.descuento > 0 && (
-                  <div className="absolute right-3 top-3 rounded-md bg-red-600 px-3 py-1 text-sm font-black text-white shadow-lg">
-                    -{juegoDetalle.descuento}%
-                  </div>
-                )}
-              </div>
+            <div className="mt-5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-purple-400 mb-2">
+                Selecciona Tipo de Adquisición
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {(() => {
+                  const precioVentaFinal = calcularPrecioConDescuento(juegoDetalle.precioVenta, juegoDetalle.descuento, juegoDetalle.tipoDescuento);
+                  const tieneDescuento = juegoDetalle.descuento > 0;
 
-              <div className="mt-5">
-                <div className="flex items-center justify-between text-xs font-semibold text-purple-400">
-                  <span>{juegoDetalle.desarrolladora_nombre}</span>
-                  <span className="capitalize">{juegoDetalle.edicion}</span>
-                </div>
-                <h2 className="mt-1 text-2xl font-bold">{juegoDetalle.titulo}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-gray-300">
-                  {juegoDetalle.descripcion}
-                </p>
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setTipoTransaccionSeleccionada("venta")}
+                        className={`p-3 rounded-xl text-left border transition ${
+                          tipoTransaccionSeleccionada === "venta"
+                            ? "bg-purple-600/30 border-purple-500 text-white"
+                            : "bg-[#211A2D] border-purple-900/50 text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <p className="font-bold text-sm">🛒 Comprar (Venta)</p>
+                        {tieneDescuento ? (
+                          <div className="mt-1">
+                            <span className="text-xs text-gray-500 line-through block">Q{juegoDetalle.precioVenta.toFixed(2)}</span>
+                            <span className="text-green-400 font-black text-lg">Q{precioVentaFinal.toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <p className="text-green-400 font-black text-lg mt-1">Q{juegoDetalle.precioVenta.toFixed(2)}</p>
+                        )}
+                      </button>
 
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-400">
-                  <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-1">
-                    Clasificación: {juegoDetalle.clasificacion_nombre}
-                  </span>
-                  <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-1">
-                    {juegoDetalle.numero_jugadores}{" "}
-                    {juegoDetalle.numero_jugadores === 1 ? "Jugador" : "Jugadores"}
-                  </span>
-                  <span className="rounded border border-purple-900/40 bg-[#211A2D] px-2 py-1">
-                    Lanzamiento: {juegoDetalle.fecha_lanzamiento}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-between border-t border-purple-900/40 pt-4">
-                <div>
-                  <span className="text-xs text-gray-400">Precio:</span>
-                  <div className="flex items-center gap-2">
-                    <p className="text-2xl font-black text-green-400">
-                      Q{(juegoDetalle.descuento > 0
-                        ? juegoDetalle.precio * (1 - juegoDetalle.descuento / 100)
-                        : juegoDetalle.precio
-                      ).toFixed(2)}
-                    </p>
-                    {juegoDetalle.descuento > 0 && (
-                      <span className="text-sm text-gray-500 line-through">
-                        Q{juegoDetalle.precio.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    agregarAlCarrito(juegoDetalle);
-                    setJuegoDetalle(null);
-                  }}
-                  className="rounded-xl bg-purple-600 px-5 py-3 text-sm font-bold transition hover:bg-purple-500 active:scale-95"
-                >
-                  Añadir al carrito 🛒
-                </button>
+                      <button
+                        type="button"
+                        onClick={() => setTipoTransaccionSeleccionada("renta")}
+                        className={`p-3 rounded-xl text-left border transition ${
+                          tipoTransaccionSeleccionada === "renta"
+                            ? "bg-green-600/30 border-green-500 text-white"
+                            : "bg-[#211A2D] border-purple-900/50 text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <p className="font-bold text-sm">⏱️ Rentar ({juegoDetalle.duracionRentaHoras}h)</p>
+                        <p className="text-green-400 font-black text-lg mt-1">Q{juegoDetalle.precioRenta.toFixed(2)}</p>
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
-          </div>,
-          document.body
-        )}
+
+            <button
+              type="button"
+              onClick={() => {
+                agregarAlCarrito(juegoDetalle, tipoTransaccionSeleccionada);
+                setJuegoDetalle(null);
+              }}
+              className="mt-6 w-full rounded-xl bg-purple-600 py-3 font-bold transition hover:bg-purple-500"
+            >
+              Añadir al carrito ({tipoTransaccionSeleccionada.toUpperCase()}) 🚀
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ================= CARRITO ================= */}
       {mostrarCarrito && (
         <div className="fixed right-6 top-24 z-50 w-[calc(100%-3rem)] max-w-96 rounded-2xl border border-purple-700/50 bg-[#181323] p-6 shadow-2xl">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">🛒 Tu carrito</h2>
-            <button
-              type="button"
-              onClick={() => setMostrarCarrito(false)}
-              className="text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
+            <button onClick={() => setMostrarCarrito(false)} className="text-gray-400 hover:text-white">✕</button>
           </div>
 
           {carrito.length === 0 ? (
-            <div className="py-8 text-center">
-              <div className="mb-3 text-4xl">🛒</div>
-              <p className="text-gray-500">Tu carrito está vacío.</p>
-            </div>
+            <p className="text-gray-500 py-6 text-center">Tu carrito está vacío.</p>
           ) : (
             <div>
-              <div className="max-h-80 space-y-3 overflow-y-auto">
-                {carrito.map((producto, index) => {
-                  const precioItem = producto.descuento > 0
-                    ? producto.precio * (1 - producto.descuento / 100)
-                    : producto.precio;
-
-                  return (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-lg bg-[#211A2D] p-3"
-                    >
-                      <div>
-                        <p className="font-semibold">{producto.titulo}</p>
-                        <p className="text-sm text-green-400">
-                          Q{precioItem.toFixed(2)}
-                        </p>
+              <div className="max-h-72 space-y-2 overflow-y-auto mb-4">
+                {carrito.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center bg-[#211A2D] p-3 rounded-lg text-sm">
+                    <div>
+                      <p className="font-semibold">{item.titulo}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${item.tipoTransaccion === "renta" ? "bg-green-900/80 text-green-300" : "bg-purple-900/80 text-purple-300"}`}>
+                          {item.tipoTransaccion}
+                        </span>
+                        <span className="text-green-400 font-bold">Q{item.precio.toFixed(2)}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => eliminarDelCarrito(index)}
-                        className="rounded-lg px-2 py-1 text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        🗑️
-                      </button>
                     </div>
-                  );
-                })}
+                    <button type="button" onClick={() => eliminarDelCarrito(idx)} className="text-red-400">🗑️</button>
+                  </div>
+                ))}
               </div>
 
-              <div className="mt-5 border-t border-purple-900/50 pt-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Total</span>
-                  <span className="text-2xl font-black text-green-400">
-                    Q{total.toFixed(2)}
-                  </span>
+              <div className="border-t border-purple-900/50 pt-4">
+                <div className="flex justify-between text-lg font-bold mb-4">
+                  <span>Total:</span>
+                  <span className="text-green-400">Q{total.toFixed(2)}</span>
                 </div>
-
                 <button
                   type="button"
                   disabled={procesandoCompra}
                   onClick={manejarContinuarCompra}
-                  className="mt-5 w-full rounded-lg bg-green-600 py-3 font-bold transition hover:bg-green-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-lg bg-green-600 py-3 font-bold transition hover:bg-green-500 disabled:opacity-50"
                 >
-                  {procesandoCompra ? "Preparando orden..." : "Continuar compra"}
+                  {procesandoCompra ? "Preparando pago..." : "Continuar compra"}
                 </button>
               </div>
             </div>
@@ -741,12 +619,8 @@ export default function Home() {
       {/* ================= FOOTER ================= */}
       <footer className="border-t border-purple-900/30 bg-[#0B0810]">
         <div className="mx-auto max-w-7xl px-6 py-10">
-          <h2 className="text-xl font-bold">
-            NEXUS<span className="text-green-500">GAMING</span>
-          </h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Tu marketplace de productos digitales.
-          </p>
+          <h2 className="text-xl font-bold">NEXUS<span className="text-green-500">GAMING</span></h2>
+          <p className="mt-2 text-sm text-gray-500">Tu marketplace de videojuegos digitales.</p>
           <p className="mt-6 text-sm text-gray-600">© 2026 NEXUSGAMING</p>
         </div>
       </footer>
