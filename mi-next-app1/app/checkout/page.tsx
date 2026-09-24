@@ -10,6 +10,14 @@ interface MetodoPago {
   Instrucciones: string;
 }
 
+interface FacturaRespuesta {
+  TransaccionID?: number;
+  FacturaID?: number;
+  NumeroFactura?: string;
+  PDFUrl?: string;
+  MontoTotal?: string | number;
+}
+
 const NGROK_BASE_URL = "https://sedation-scribe-state.ngrok-free.dev";
 
 export default function CheckoutPage() {
@@ -18,6 +26,7 @@ export default function CheckoutPage() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
+  const [datosFactura, setDatosFactura] = useState<FacturaRespuesta | null>(null);
 
   // Lista dinámica de métodos de pago
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
@@ -91,9 +100,6 @@ export default function CheckoutPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // -------------------------------------------------------------
-      // PASO 1: PROCESAR EL PAGO DIRECTAMENTE
-      // -------------------------------------------------------------
       const payloadPago = {
         MetodoPagoID: Number(metodoPagoId),
         NombreCliente: nombreCliente,
@@ -110,27 +116,26 @@ export default function CheckoutPage() {
         body: JSON.stringify(payloadPago),
       });
 
-      let errorData: any = {};
+      let responseData: any = {};
       try {
-        errorData = await resPago.json();
+        responseData = await resPago.json();
       } catch {
-        errorData = {};
+        responseData = {};
       }
 
       if (!resPago.ok) {
         let detalle = "Error al procesar el pago.";
 
-        if (Array.isArray(errorData.detail)) {
-          detalle = errorData.detail
+        if (Array.isArray(responseData.detail)) {
+          detalle = responseData.detail
             .map((d: any) => `${d.loc ? d.loc.join("->") : "campo"}: ${d.msg}`)
             .join(" | ");
-        } else if (typeof errorData.detail === "string") {
-          detalle = errorData.detail;
-        } else if (errorData.message) {
-          detalle = errorData.message;
+        } else if (typeof responseData.detail === "string") {
+          detalle = responseData.detail;
+        } else if (responseData.message) {
+          detalle = responseData.message;
         }
 
-        // Si el backend sigue exigiendo el pedido previo, mostramos una guía clara
         if (detalle.includes("PENDIENTE_PAGO")) {
           detalle = "No tienes un pedido pendiente activo. Asegúrate de agregar productos al carrito antes de pagar.";
         }
@@ -138,13 +143,17 @@ export default function CheckoutPage() {
         throw new Error(detalle);
       }
 
-      // Éxito: Limpiar almacenamiento local y redirigir
+      // Guardamos la información detallada de la factura devuelta por FastAPI
+      setDatosFactura(responseData);
+
+      // Éxito: Limpiar almacenamiento local y activar estado de éxito
       localStorage.removeItem("carrito_nexus");
       setExito(true);
 
+      // Damos más tiempo (6 segundos) para que el usuario pueda interactuar o ver su factura antes de salir
       setTimeout(() => {
         router.push("/biblioteca");
-      }, 2500);
+      }, 6000);
 
     } catch (err: any) {
       console.error("Error al procesar la compra:", err);
@@ -170,8 +179,40 @@ export default function CheckoutPage() {
         <p className="text-sm text-gray-400 mb-6">Ingresa los detalles de tu método de pago</p>
 
         {exito && (
-          <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-4 text-center text-sm font-semibold text-green-400">
-            🎉 ¡Pago procesado con éxito! Redirigiendo a tu biblioteca...
+          <div className="mb-6 rounded-xl border border-green-500/40 bg-green-500/10 p-5 text-center text-sm text-green-400 space-y-3">
+            <p className="font-bold text-base">🎉 ¡Pago procesado con éxito!</p>
+
+            {datosFactura && (
+              <div className="rounded-lg bg-[#211A2D] p-4 text-left space-y-2 text-xs text-gray-300 border border-purple-900/40">
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">No. Factura:</span> 
+                  <span className="text-white font-mono">{datosFactura.NumeroFactura || "N/A"}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">Transacción ID:</span> 
+                  <span className="text-white font-mono">{datosFactura.TransaccionID || "N/A"}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-purple-400 font-semibold">Monto Total:</span> 
+                  <span className="text-green-400 font-bold">Q{Number(datosFactura.MontoTotal || 0).toFixed(2)}</span>
+                </p>
+
+                {datosFactura.PDFUrl && datosFactura.PDFUrl !== "string" && (
+                  <div className="pt-2">
+                    <a
+                      href={datosFactura.PDFUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block w-full rounded bg-purple-600 py-2 text-center font-bold text-white hover:bg-purple-500 transition shadow"
+                    >
+                      📄 Ver / Descargar Factura PDF
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-purple-300 pt-1">Redirigiendo a tu biblioteca...</p>
           </div>
         )}
 
